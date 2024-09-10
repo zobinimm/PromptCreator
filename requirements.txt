@@ -1,0 +1,5 @@
+spacy
+torch
+sentencepiece
+tokenizers
+transformers
