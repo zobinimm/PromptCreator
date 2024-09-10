@@ -153,27 +153,38 @@ for i, pattern in enumerate(patterns):
 def extract_description(text):
     doc = nlp(text)
     matches = matcher(doc)
-    descriptions = set()
+    descriptions = []
 
-    # 查看所有匹配的文本和它们的类型
+    # 按顺序提取匹配的文本
     for match_id, start, end in matches:
         span = doc[start:end]
-        print(f"Matched Span: {span.text} (Start: {start}, End: {end})")  # Debug输出
-        descriptions.add(span.text.lower())  # 转为小写以避免因大小写不同而重复
+        descriptions.append((start, span.text.lower()))  # 记录位置和描述词
 
-    # 将描述词列表按长度从长到短排序以便优先保留较长的描述词
-    sorted_descriptions = sorted(descriptions, key=len, reverse=True)
+    # 去除包含关系的重复项，保留最完整的描述词
+    descriptions.sort(key=lambda x: x[0])  # 按位置排序
 
-    # 去除包含关系的重复项
     unique_descriptions = []
-    for desc in sorted_descriptions:
-        if not any(desc in existing for existing in unique_descriptions):
-            unique_descriptions.append(desc)
+
+    for i, (pos, desc) in enumerate(descriptions):
+        # 检查是否已有描述词包含当前描述词
+        has_flag = False
+        for j, (pos1, desc1) in enumerate(descriptions):
+            if i != j and desc != desc1:
+                if desc in desc1:
+                    has_flag = True
+                    break
+        if not has_flag:
+            # 添加当前描述词，并移除包含当前描述词的其他描述词
+            unique_descriptions = [existing for existing in unique_descriptions if
+                                   not (desc in existing and len(desc) < len(existing))]
+            if desc not in unique_descriptions:
+                unique_descriptions.append(desc)
 
     return unique_descriptions
 
 
 # 示例句子
+#text = "The tall man with a beard ran quickly through the dense forest. He was searching for his lost dog while trying to avoid the heavy rain."
 text = "A boy lay motionless in the crater, the soil on his body blending him in with the surrounding environment."
 
 # 提取描述词
@@ -183,6 +194,8 @@ print("Extracted Descriptions:", descriptions)
 # 生成AI绘画提示词
 prompt = ",".join(descriptions)
 print("Generated Prompt for AI Drawing:", prompt)
+
+
 
 
 
