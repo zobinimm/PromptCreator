@@ -81,121 +81,139 @@ import spacy
 
 
 
+# import spacy
+# from spacy.matcher import Matcher
+#
+# # 加载模型
+# nlp = spacy.load("en_core_web_trf")
+#
+# # 创建 Matcher 对象
+# matcher = Matcher(nlp.vocab)
+#
+# # 定义模式：用于捕获人物姓名（如 Alice）
+# person_pattern = [
+#     {"POS": "PROPN"},  # 专有名词
+#     {"POS": "PROPN", "OP": "*"},  # 可选的第二个专有名词（用于包含姓名和姓）
+# ]
+#
+# # 定义模式：用于捕获场景（如 sunny park）
+# scene_pattern = [
+#     {"POS": "ADJ", "OP": "*"},  # 可能的形容词（描述场景的特征）
+#     {"POS": "NOUN"},  # 名词（场景的名称）
+# ]
+#
+# # 添加模式到 Matcher
+# matcher.add("PERSON", [person_pattern])
+# matcher.add("SCENE", [scene_pattern])
+#
+# # 示例文本
+# text = "The tall man with a beard ran quickly through the dense forest. He was searching for his lost dog while trying to avoid the heavy rain."
+#
+# # 处理文本
+# doc = nlp(text)
+#
+# # 查找匹配
+# matches = matcher(doc)
+#
+# # 提取并显示匹配的实体及其描述
+# for match_id, start, end in matches:
+#     span = doc[start:end]
+#     match_id_str = nlp.vocab.strings[match_id]
+#     # 获取实体的描述（在句子中的上下文）
+#     description = doc[start-3:end+3].text  # 获取实体前后各3个词的上下文
+#     #print(f"{span.text},{match_id_str},")
+#     #print(f"{span.text},")
+#
+# # 输出例子
+#
+#
+# import spacy
+# from spacy.matcher import Matcher
+#
+# # 加载spaCy的transformer模型
+# nlp = spacy.load("en_core_web_trf")
+#
+# # 初始化Matcher
+# matcher = Matcher(nlp.vocab)
+#
+# # 定义模式以匹配更多描述词
+# patterns = [
+#     [{"POS": "ADJ"}],  # 单个形容词
+#     [{"POS": "ADJ"}, {"POS": "NOUN"}],  # 形容词 + 名词
+#     [{"POS": "NOUN"}],  # 单个名词
+#     [{"POS": "ADJ", "OP": "*", "TAG": "JJ"}, {"POS": "NOUN", "OP": "*"}]  # 形容词及名词短语
+# ]
+#
+# # 添加每个模式到matcher
+# for i, pattern in enumerate(patterns):
+#     matcher.add(f"DESCRIPTION_PATTERN_{i}", [pattern])
+#
+#
+# # 函数：提取描述词
+# def extract_description(text):
+#     doc = nlp(text)
+#     matches = matcher(doc)
+#     descriptions = []
+#
+#     # 按顺序提取匹配的文本
+#     for match_id, start, end in matches:
+#         span = doc[start:end]
+#         descriptions.append((start, span.text.lower()))  # 记录位置和描述词
+#
+#     # 去除包含关系的重复项，保留最完整的描述词
+#     descriptions.sort(key=lambda x: x[0])  # 按位置排序
+#
+#     unique_descriptions = []
+#
+#     for i, (pos, desc) in enumerate(descriptions):
+#         # 检查是否已有描述词包含当前描述词
+#         has_flag = False
+#         for j, (pos1, desc1) in enumerate(descriptions):
+#             if i != j and desc != desc1:
+#                 if desc in desc1:
+#                     has_flag = True
+#                     break
+#         if not has_flag:
+#             # 添加当前描述词，并移除包含当前描述词的其他描述词
+#             unique_descriptions = [existing for existing in unique_descriptions if
+#                                    not (desc in existing and len(desc) < len(existing))]
+#             if desc not in unique_descriptions:
+#                 unique_descriptions.append(desc)
+#
+#     return unique_descriptions
+#
+#
+# # 示例句子
+# #text = "The tall man with a beard ran quickly through the dense forest. He was searching for his lost dog while trying to avoid the heavy rain."
+# text = "A boy lay motionless in the crater, the soil on his body blending him in with the surrounding environment."
+#
+# # 提取描述词
+# descriptions = extract_description(text)
+# print("Extracted Descriptions:", descriptions)
+#
+# # 生成AI绘画提示词
+# prompt = ",".join(descriptions)
+# print("Generated Prompt for AI Drawing:", prompt)
+
+
 import spacy
-from spacy.matcher import Matcher
 
-# 加载模型
-nlp = spacy.load("en_core_web_trf")
+# 加载 spaCy 中文模型
+# nlp = spacy.load("zh_core_web_trf")
+nlp = spacy.load("en_core_web_lg")
 
-# 创建 Matcher 对象
-matcher = Matcher(nlp.vocab)
-
-# 定义模式：用于捕获人物姓名（如 Alice）
-person_pattern = [
-    {"POS": "PROPN"},  # 专有名词
-    {"POS": "PROPN", "OP": "*"},  # 可选的第二个专有名词（用于包含姓名和姓）
-]
-
-# 定义模式：用于捕获场景（如 sunny park）
-scene_pattern = [
-    {"POS": "ADJ", "OP": "*"},  # 可能的形容词（描述场景的特征）
-    {"POS": "NOUN"},  # 名词（场景的名称）
-]
-
-# 添加模式到 Matcher
-matcher.add("PERSON", [person_pattern])
-matcher.add("SCENE", [scene_pattern])
-
-# 示例文本
-text = "The tall man with a beard ran quickly through the dense forest. He was searching for his lost dog while trying to avoid the heavy rain."
+# text = "北京体育大学一男生简直是太幸福了，他迎来一位奥运冠军同桌。该男生上课时发现同桌竟是奥运冠军袁心玥。"
+text = "A boy at Beijing Physical Education University was so happy that he welcomed an Olympic champion at the same table. During class, the boy discovered that the same table was actually Olympic champion Yuan Xinyue."
 
 # 处理文本
 doc = nlp(text)
 
-# 查找匹配
-matches = matcher(doc)
+# 默认句子分割
+sentences = [sent.text.strip() for sent in doc.sents]
 
-# 提取并显示匹配的实体及其描述
-for match_id, start, end in matches:
-    span = doc[start:end]
-    match_id_str = nlp.vocab.strings[match_id]
-    # 获取实体的描述（在句子中的上下文）
-    description = doc[start-3:end+3].text  # 获取实体前后各3个词的上下文
-    #print(f"{span.text},{match_id_str},")
-    #print(f"{span.text},")
-
-# 输出例子
-
-
-import spacy
-from spacy.matcher import Matcher
-
-# 加载spaCy的transformer模型
-nlp = spacy.load("en_core_web_trf")
-
-# 初始化Matcher
-matcher = Matcher(nlp.vocab)
-
-# 定义模式以匹配更多描述词
-patterns = [
-    [{"POS": "ADJ"}],  # 单个形容词
-    [{"POS": "ADJ"}, {"POS": "NOUN"}],  # 形容词 + 名词
-    [{"POS": "NOUN"}],  # 单个名词
-    [{"POS": "ADJ", "OP": "*", "TAG": "JJ"}, {"POS": "NOUN", "OP": "*"}]  # 形容词及名词短语
-]
-
-# 添加每个模式到matcher
-for i, pattern in enumerate(patterns):
-    matcher.add(f"DESCRIPTION_PATTERN_{i}", [pattern])
-
-
-# 函数：提取描述词
-def extract_description(text):
-    doc = nlp(text)
-    matches = matcher(doc)
-    descriptions = []
-
-    # 按顺序提取匹配的文本
-    for match_id, start, end in matches:
-        span = doc[start:end]
-        descriptions.append((start, span.text.lower()))  # 记录位置和描述词
-
-    # 去除包含关系的重复项，保留最完整的描述词
-    descriptions.sort(key=lambda x: x[0])  # 按位置排序
-
-    unique_descriptions = []
-
-    for i, (pos, desc) in enumerate(descriptions):
-        # 检查是否已有描述词包含当前描述词
-        has_flag = False
-        for j, (pos1, desc1) in enumerate(descriptions):
-            if i != j and desc != desc1:
-                if desc in desc1:
-                    has_flag = True
-                    break
-        if not has_flag:
-            # 添加当前描述词，并移除包含当前描述词的其他描述词
-            unique_descriptions = [existing for existing in unique_descriptions if
-                                   not (desc in existing and len(desc) < len(existing))]
-            if desc not in unique_descriptions:
-                unique_descriptions.append(desc)
-
-    return unique_descriptions
-
-
-# 示例句子
-#text = "The tall man with a beard ran quickly through the dense forest. He was searching for his lost dog while trying to avoid the heavy rain."
-text = "A boy lay motionless in the crater, the soil on his body blending him in with the surrounding environment."
-
-# 提取描述词
-descriptions = extract_description(text)
-print("Extracted Descriptions:", descriptions)
-
-# 生成AI绘画提示词
-prompt = ",".join(descriptions)
-print("Generated Prompt for AI Drawing:", prompt)
-
-
+# 输出结果
+for sentence in sentences:
+    print(sentence)
 
 
 

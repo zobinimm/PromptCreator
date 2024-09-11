@@ -3,3 +3,4 @@ torch
 sentencepiece
 tokenizers
 transformers
+flask
