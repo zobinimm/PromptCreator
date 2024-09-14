@@ -12,6 +12,9 @@ import os
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 import torch
 from collections import deque
+import ChatTTS
+from scipy.io import wavfile
+import numpy as np
 
 current_directory = os.path.dirname(__file__)
 
@@ -32,6 +35,7 @@ request_times = deque()
 MAX_REQUESTS = 5
 TIME_WINDOW = 1  # 时间窗口，单位为秒
 
+# API:create_film_item
 def sign(key, msg):
     return hmac.new(key, msg.encode("utf-8"), hashlib.sha256).digest()
 
@@ -266,6 +270,82 @@ def create_film_item():
                 "TranslatedText": translated_sentences,
                 "promptKey": keywords
             }
+
+        return jsonify(response_data)
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# API:create_film_audio
+class TorchSeedContext:
+    def __init__(self, seed):
+        self.seed = seed
+        self.state = None
+
+    def __enter__(self):
+        self.state = torch.random.get_rng_state()
+        torch.manual_seed(self.seed)
+
+    def __exit__(self, type, value, traceback):
+        torch.random.set_rng_state(self.state)
+
+def replace_arabic_with_chinese(text: str) -> str:
+    arabic_to_chinese = {
+        '0': '零',
+        '1': '一',
+        '2': '二',
+        '3': '三',
+        '4': '四',
+        '5': '五',
+        '6': '六',
+        '7': '七',
+        '8': '八',
+        '9': '九'
+    }
+    chinese_text = ''.join(arabic_to_chinese[char] if char in arabic_to_chinese else char for char in text)
+    return chinese_text
+
+def calculate_audio_duration(wav_data: np.ndarray, sample_rate: int) -> float:
+    duration = len(wav_data) / sample_rate
+    return duration
+
+@app.route('/createfilmaudio', methods=['POST'])
+def create_film_audio():
+    data = request.get_json()
+    # 解析 JSON 数据
+    text = data.get('text')
+    file_path = data.get('file_path')
+    seed = data.get('seed')
+    temperature = data.get('temperature')
+    top_P = data.get('top_P')
+    top_K = data.get('top_K')
+
+    try:
+        chat = ChatTTS.Chat()
+        chat.load(compile=True)
+
+        with TorchSeedContext(seed):
+            rand_spk = chat.sample_random_speaker()
+
+        params_infer_code = ChatTTS.Chat.InferCodeParams(
+            spk_emb=rand_spk,
+            temperature=temperature,
+            top_P=top_P,
+            top_K=top_K,
+            manual_seed=seed,
+        )
+
+        wavs = chat.infer(replace_arabic_with_chinese(text), skip_refine_text=True, params_infer_code=params_infer_code, )
+
+        for i in range(len(wavs)):
+            if i == 0:
+                wavfile.write(file_path, 24000, wavs[i])
+                duration = calculate_audio_duration(wavs[i], 24000)
+
+        response_data = {
+            "file_path": file_path,
+            "duration": duration
+        }
 
         return jsonify(response_data)
 
