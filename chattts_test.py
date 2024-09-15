@@ -53,8 +53,8 @@ chat.load()
 
 text = "例如，在“采用指南”中，我们编写了易于遵循的操作指南，逐步引导您和团队了解将 Dynamics 365 推广到组织中的最佳方法。 本指南重点关注创建全面的采用和变更管理 (ACM) 计划的需求。 要了解为什么变更管理对于 Dynamics 365 数字化转型取得成功至关重要，这段“推动数字化转型变更”的视频将为您解答疑问。"
 
-
-with TorchSeedContext(1997):
+manual_seed = 1997
+with TorchSeedContext(manual_seed):
     rand_spk = chat.sample_random_speaker()
 
 params_infer_code = ChatTTS.Chat.InferCodeParams(
@@ -62,7 +62,7 @@ params_infer_code = ChatTTS.Chat.InferCodeParams(
     temperature=0.3,
     top_P=0.7,
     top_K=20,
-    manual_seed=1997,
+    manual_seed=manual_seed,
 )
 
 wavs = chat.infer(replace_arabic_with_chinese(text), skip_refine_text=True, params_infer_code=params_infer_code,)
