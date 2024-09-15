@@ -27,10 +27,14 @@ pip install /path/to/zh_core_web_trf-3.7.2-py3-none-any.whl
 ```
 
 ## ChatTTS
+GPU before
+```bash
+pip install torch==2.4.0 torchvision==0.19.0 torchaudio==2.4.0 --index-url https://download.pytorch.org/whl/cu124
+```
+Copy torio from ChatTTS's package into the package
 ```bash
 pip install git+https://github.com/2noise/ChatTTS
 ```
-
 ## Run
 ```bash
 python app.py

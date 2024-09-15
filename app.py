@@ -322,7 +322,7 @@ def create_film_audio():
 
     try:
         chat = ChatTTS.Chat()
-        chat.load(compile=True)
+        chat.load()
 
         with TorchSeedContext(seed):
             rand_spk = chat.sample_random_speaker()

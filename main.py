@@ -200,7 +200,7 @@ import spacy
 
 # 加载 spaCy 中文模型
 # nlp = spacy.load("zh_core_web_trf")
-nlp = spacy.load("en_core_web_lg")
+nlp = spacy.load("en_core_web_trf")
 
 # text = "北京体育大学一男生简直是太幸福了，他迎来一位奥运冠军同桌。该男生上课时发现同桌竟是奥运冠军袁心玥。"
 text = "A boy at Beijing Physical Education University was so happy that he welcomed an Olympic champion at the same table. During class, the boy discovered that the same table was actually Olympic champion Yuan Xinyue."

@@ -29,9 +29,10 @@ def replace_arabic_with_chinese(text: str) -> str:
     }
     chinese_text = ''.join(arabic_to_chinese[char] if char in arabic_to_chinese else char for char in text)
     return chinese_text
-
 chat = ChatTTS.Chat()
-chat.load(compile=True) # Set to True for better performance
+#chat.load(compile=True) # Set to True for better performance
+#GPU load
+chat.load()
 # if not chat.has_loaded():
 #     print("Model loading failed") , source="custom", custom_path="E:/Self/001-SelfGit/PromptCreator"
 
