@@ -221,7 +221,10 @@ def create_film_item():
     secret_key = data.get('secret_key')  # Tencent 翻译 API 密钥
 
     # 验证输入参数
-    if not file_path or not language or not translation_module or not appid or not secret_key:
+    if not file_path or not language or not translation_module:
+        return jsonify({"error": "Missing required parameters."}), 400
+
+    if (translation_module == "tencent" or translation_module == "baidu") and (not appid or not secret_key):
         return jsonify({"error": "Missing required parameters."}), 400
 
     try:
@@ -259,16 +262,16 @@ def create_film_item():
         if language.lower() == "english":
             # 英文句子设为 TranslatedText，翻译后的中文设为 OriginalText
             response_data = {
-                "OriginalText": translated_sentences,
-                "TranslatedText": sentences,
-                "promptKey": keywords
+                "original_text": translated_sentences,
+                "translated_text": sentences,
+                "prompt_key": keywords
             }
         elif language.lower() == "chinese":
             # 中文句子设为 OriginalText，翻译后的英文设为 TranslatedText
             response_data = {
-                "OriginalText": sentences,
-                "TranslatedText": translated_sentences,
-                "promptKey": keywords
+                "original_text": sentences,
+                "translated_text": translated_sentences,
+                "prompt_key": keywords
             }
 
         return jsonify(response_data)
@@ -355,4 +358,4 @@ def create_film_audio():
 
 # 运行 Flask 应用程序
 if __name__ == '__main__':
-    app.run(debug=True, port=7855)
+    app.run(debug=False, port=7855)
