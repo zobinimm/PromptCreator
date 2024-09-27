@@ -1,5 +1,6 @@
 from flask import Flask, request, jsonify
 import spacy
+import string
 from spacy.matcher import Matcher
 from typing import List
 import requests
@@ -228,11 +229,6 @@ def create_film_item():
         return jsonify({"error": "Missing required parameters."}), 400
 
     try:
-        # 读取文本文件内容
-        with open(file_path, 'r', encoding='utf-8') as file:
-            text = file.read()
-
-        # 使用 spaCy 将文本按句子分解
         if language.lower() == "english":
             nlp = nlp_en
             source_lang = "en"
@@ -244,17 +240,44 @@ def create_film_item():
         else:
             return jsonify({"error": "Unsupported language."}), 400
 
-        doc = nlp(text)
-        sentences = [sent.text for sent in doc.sents]
+        # 存放整理后的文本行
+        cleaned_lines = []
+        add_line = ''
+        CONTROL_CHARS = ''.join(map(chr, range(0, 32)))
+        with open(file_path, 'r', encoding='utf-8') as file:
+            for line in file:
+                line = line.strip()  # 去掉行首尾空白字符
+                line = ''.join(char for char in line if char not in string.whitespace and char not in CONTROL_CHARS)
+                if not line:
+                    continue
+                # 判断最后一个字符是否为标点符号
+                doc = nlp(line)
+                is_last_token_punctuation = doc[-1].is_punct if doc else False
+
+                if is_last_token_punctuation:
+                    if add_line:
+                        cleaned_lines.append(add_line + line)
+                    else:
+                        cleaned_lines.append(line)
+                    add_line = ''
+                else:
+                    add_line = add_line + line
+
+        # 使用 spaCy 将整理后的文本按句子分解，得到句子数组
+        sentence_array = []
+        for line in cleaned_lines:
+            doc = nlp(line)
+            sentences = [sent.text.strip() for sent in doc.sents]
+            sentence_array.extend(sentences)
 
         # 翻译句子
         translated_sentences = [
             translate_text(sentence, translation_module, source_lang, target_lang, appid, secret_key) for sentence in
-            sentences]
+            sentence_array]
 
         # 提取关键词（根据语言决定从哪个句子列表中提取）
         if language.lower() == "english":
-            keywords = [extract_description(sentence) for sentence in sentences]
+            keywords = [extract_description(sentence) for sentence in sentence_array]
         elif language.lower() == "chinese":
             keywords = [extract_description(translated_sentence) for translated_sentence in translated_sentences]
 
@@ -263,13 +286,13 @@ def create_film_item():
             # 英文句子设为 TranslatedText，翻译后的中文设为 OriginalText
             response_data = {
                 "original_text": translated_sentences,
-                "translated_text": sentences,
+                "translated_text": sentence_array,
                 "prompt_key": keywords
             }
         elif language.lower() == "chinese":
             # 中文句子设为 OriginalText，翻译后的英文设为 TranslatedText
             response_data = {
-                "original_text": sentences,
+                "original_text": sentence_array,
                 "translated_text": translated_sentences,
                 "prompt_key": keywords
             }
