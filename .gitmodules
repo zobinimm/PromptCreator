@@ -1,0 +1,3 @@
+[submodule "libs/pyJianYingDraft"]
+	path = libs/pyJianYingDraft
+	url = https://github.com/zobinimm/pyJianYingDraft.git

@@ -35,6 +35,11 @@ Copy torio from ChatTTS's package into the package
 ```bash
 pip install git+https://github.com/2noise/ChatTTS
 ```
+## pyJianYingDraft
+```bash
+cd libs\pyJianYingDraft
+pip install .
+```
 ## Run
 ```bash
 python app.py

@@ -1,6 +1,9 @@
 spacy
 torch
+sacremoses
 sentencepiece
 tokenizers
 transformers
 flask
+pymediainfo
+imageio
