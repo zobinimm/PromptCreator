@@ -196,26 +196,71 @@ import spacy
 # print("Generated Prompt for AI Drawing:", prompt)
 
 
+# import spacy
+# from collections import Counter
+# from transformers import BertTokenizer, BertForSequenceClassification
+# from transformers import pipeline
+#
+# with open("D:/download/000_Text_txt/001_afm_test.txt", 'r', encoding='utf-8') as file:
+#     text = file.read()
+#
+# # 加载 spaCy 中文模型
+# nlp = spacy.load("zh_core_web_trf")
+# # nlp = spacy.load("en_core_web_trf")
+# # 处理文本
+# doc = nlp(text)
+#
+# tokenizer = BertTokenizer.from_pretrained('bert-base-chinese')
+# model = BertForSequenceClassification.from_pretrained('bert-base-chinese', num_labels=2)
+#
+# # 提取人名
+# names = [ent.text for ent in doc.ents if ent.label_ == "PERSON"]
+#
+# # 统计人名出现的次数
+# name_counts = Counter(names)
+#
+# # 使用 Hugging Face pipeline 进行性别分类
+# classifier = pipeline("text-classification", model=model, tokenizer=tokenizer)
+#
+# # 打印人名及其出现次数和性别
+# for name, times in name_counts.items():
+#     # 对姓名进行分类
+#     result = classifier(name)
+#     gender_label = '男' if result[0]['label'] == 'LABEL_1' else '女'  # 根据标签推断性别
+#
+#     print(f"姓名：{name} 出现次数：{times} 性别：{gender_label}")
+
 import spacy
+from collections import Counter
+from libs.gender_predictor.Naive_Bayes_Gender.gender import Gender
+
+with open("D:/download/000_Text_txt/001_afm_test.txt", 'r', encoding='utf-8') as file:
+    text = file.read()
 
 # 加载 spaCy 中文模型
-# nlp = spacy.load("zh_core_web_trf")
-nlp = spacy.load("en_core_web_trf")
-
-# text = "北京体育大学一男生简直是太幸福了，他迎来一位奥运冠军同桌。该男生上课时发现同桌竟是奥运冠军袁心玥。"
-text = "A boy at Beijing Physical Education University was so happy that he welcomed an Olympic champion at the same table. During class, the boy discovered that the same table was actually Olympic champion Yuan Xinyue."
-
+nlp = spacy.load("zh_core_web_trf")
+# nlp = spacy.load("en_core_web_trf")
 # 处理文本
 doc = nlp(text)
 
-# 默认句子分割
-sentences = [sent.text.strip() for sent in doc.sents]
+# 提取人名
+names = [ent.text for ent in doc.ents if ent.label_ == "PERSON"]
 
-# 输出结果
-for sentence in sentences:
-    print(sentence)
+# 统计人名出现的次数
+name_counts = Counter(names)
+gender = Gender()
+# 打印人名及其出现次数和性别
+for name, times in name_counts.items():
+    gender_probabilities = gender.predict(name)[1]
+    if gender_probabilities['M'] > gender_probabilities['F']:
+        gender_label = '男'
+    elif gender_probabilities['F'] > gender_probabilities['M']:
+        gender_label = '女'
+    else:
+        gender_label = '未知'
 
-
+    # 对姓名进行分类
+    print(f"姓名：{name} 出现次数：{times} 性别：{gender_label}")
 
 
 

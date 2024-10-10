@@ -1,3 +1,6 @@
 [submodule "libs/pyJianYingDraft"]
 	path = libs/pyJianYingDraft
 	url = https://github.com/zobinimm/pyJianYingDraft.git
+[submodule "libs/gender-predictor"]
+	path = libs/gender_predictor
+	url = https://github.com/zobinimm/gender-predictor.git
