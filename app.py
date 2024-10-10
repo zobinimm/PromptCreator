@@ -1,23 +1,27 @@
-from flask import Flask, request, jsonify
-import spacy
-import string
-from spacy.matcher import Matcher
-from typing import List
-import requests
 import hashlib
-import time
 import hmac
 import json
-from datetime import datetime
 import os
-from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
-import torch
+import string
+import time
+from collections import Counter
 from collections import deque
+from datetime import datetime
+from typing import List
+
 import ChatTTS
-from scipy.io import wavfile
 import numpy as np
 import pyJianYingDraft as draft
-from pyJianYingDraft import Intro_type, Transition_type, trange
+import requests
+import spacy
+import torch
+from flask import Flask, request, jsonify
+from pyJianYingDraft import trange
+from scipy.io import wavfile
+from spacy.matcher import Matcher
+from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
+
+from libs.gender_predictor.Naive_Bayes_Gender.gender import Gender
 
 current_directory = os.path.dirname(__file__)
 
@@ -237,6 +241,7 @@ def create_film_item():
             target_lang = "zh"  # 翻译目标语言为中文
         elif language.lower() == "chinese":
             nlp = nlp_zh
+            gender = Gender()
             source_lang = "zh"
             target_lang = "en"  # 翻译目标语言为英文
         else:
@@ -267,10 +272,16 @@ def create_film_item():
 
         # 使用 spaCy 将整理后的文本按句子分解，得到句子数组
         sentence_array = []
+        characters = []
+        total_name_counts = Counter()
         for line in cleaned_lines:
             doc = nlp(line)
             sentences = [sent.text.strip() for sent in doc.sents]
             sentence_array.extend(sentences)
+            names = [ent.text for ent in doc.ents if ent.label_ == "PERSON"]
+            total_name_counts.update(names)
+
+
 
         # 翻译句子
         translated_sentences = [
@@ -282,6 +293,19 @@ def create_film_item():
             keywords = [extract_description(sentence) for sentence in sentence_array]
         elif language.lower() == "chinese":
             keywords = [extract_description(translated_sentence) for translated_sentence in translated_sentences]
+            for name, times in total_name_counts.items():
+                gender_probabilities = gender.predict(name)[1]
+                if gender_probabilities['M'] > gender_probabilities['F']:
+                    gender_label = 'male'
+                elif gender_probabilities['F'] > gender_probabilities['M']:
+                    gender_label = 'female'
+                else:
+                    gender_label = 'unknown'
+                characters.append({
+                    "char_name": name,
+                    "char_times": times,
+                    "char_gender": gender_label
+                })
 
         # 根据语言参数调整返回的 JSON 结构
         if language.lower() == "english":
@@ -289,14 +313,16 @@ def create_film_item():
             response_data = {
                 "original_text": translated_sentences,
                 "translated_text": sentence_array,
-                "prompt_key": keywords
+                "prompt_key": keywords,
+                "characters": characters
             }
         elif language.lower() == "chinese":
             # 中文句子设为 OriginalText，翻译后的英文设为 TranslatedText
             response_data = {
                 "original_text": sentence_array,
                 "translated_text": translated_sentences,
-                "prompt_key": keywords
+                "prompt_key": keywords,
+                "characters": characters
             }
 
         return jsonify(response_data)
