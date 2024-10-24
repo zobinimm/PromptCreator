@@ -8,6 +8,7 @@ from collections import Counter
 from collections import deque
 from datetime import datetime
 from typing import List
+from pypinyin import pinyin, Style
 
 import ChatTTS
 import numpy as np
@@ -216,6 +217,88 @@ def tencent_translate_text(text: str, source_lang: str, target_lang: str, secret
     except requests.RequestException as err:
         print(f"Error: {err}")
 
+@app.route('/createfilmchar', methods=['POST'])
+def create_film_char():
+    # 获取输入参数
+    data = request.get_json()
+    # 解析 JSON 数据
+    file_path = data.get('file_path')
+    language = data.get('language')
+    # 验证输入参数
+    if not file_path or not language:
+        return jsonify({"error": "Missing required parameters."}), 400
+
+    try:
+        if language.lower() == "english":
+            nlp = nlp_en
+        elif language.lower() == "chinese":
+            nlp = nlp_zh
+            gender = Gender()
+        else:
+            return jsonify({"error": "Unsupported language."}), 400
+
+        # 存放整理后的文本行
+        cleaned_lines = []
+        add_line = ''
+        CONTROL_CHARS = ''.join(map(chr, range(0, 32)))
+        with open(file_path, 'r', encoding='utf-8') as file:
+            for line in file:
+                line = line.strip()  # 去掉行首尾空白字符
+                line = ''.join(char for char in line if char not in string.whitespace and char not in CONTROL_CHARS)
+                if not line:
+                    continue
+                # 判断最后一个字符是否为标点符号
+                doc = nlp(line)
+                is_last_token_punctuation = doc[-1].is_punct if doc else False
+
+                if is_last_token_punctuation:
+                    if add_line:
+                        cleaned_lines.append(add_line + line)
+                    else:
+                        cleaned_lines.append(line)
+                    add_line = ''
+                else:
+                    add_line = add_line + line
+
+        characters = []
+        total_name_counts = Counter()
+        name_to_pinyin = {}
+        for line in cleaned_lines:
+            doc = nlp(line)
+            names = [ent.text for ent in doc.ents if ent.label_ == "PERSON"]
+            for name in names:
+                if language.lower() == "english":
+                    name_pinyin = name
+                elif language.lower() == "chinese":
+                    name_pinyin = ''.join([item[0] for item in pinyin(name, style=Style.NORMAL)])
+                name_to_pinyin[name] = name_pinyin
+
+        for name in name_to_pinyin:
+            count = sum(line.count(name) for line in cleaned_lines)
+            total_name_counts[name] = count
+
+        for name, times in total_name_counts.items():
+            name_pinyin = name_to_pinyin[name]
+            gender_probabilities = gender.predict(name)[1]
+
+            if gender_probabilities['M'] > gender_probabilities['F']:
+                gender_label = 'male'
+            elif gender_probabilities['F'] > gender_probabilities['M']:
+                gender_label = 'female'
+            else:
+                gender_label = 'unknown'
+
+            characters.append({
+                "char_name": name,
+                "char_nm_pinyin": name_pinyin,
+                "char_times": times,
+                "char_gender": gender_label
+            })
+        return jsonify(characters)
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 @app.route('/createfilmitem', methods=['POST'])
 def create_film_item():
     # 获取输入参数
@@ -226,6 +309,8 @@ def create_film_item():
     translation_module = data.get('translation_module')
     appid = data.get('appid')  # Tencent 翻译 API APPID
     secret_key = data.get('secret_key')  # Tencent 翻译 API 密钥
+    create_characters = data.get('create_characters')
+    req_characters = data.get('characters', [])
 
     # 验证输入参数
     if not file_path or not language or not translation_module:
@@ -271,17 +356,47 @@ def create_film_item():
                     add_line = add_line + line
 
         # 使用 spaCy 将整理后的文本按句子分解，得到句子数组
+        sentence_original_array = []
         sentence_array = []
         characters = []
         total_name_counts = Counter()
+        name_to_pinyin = {}
+        if create_characters:
+            for line in cleaned_lines:
+                doc = nlp(line)
+                names = [ent.text for ent in doc.ents if ent.label_ == "PERSON"]
+                for name in names:
+                    if language.lower() == "english":
+                        name_pinyin = name
+                    elif language.lower() == "chinese":
+                        name_pinyin = ''.join([item[0] for item in pinyin(name, style=Style.NORMAL)])
+                    name_to_pinyin[name] = name_pinyin
+            for name in name_to_pinyin:
+                count = sum(line.count(name) for line in cleaned_lines)
+                total_name_counts[name] = count
+        else:
+            for req_character in req_characters:
+                total_name_counts[req_character.get('char_name')] += 1
+                if not req_character.get('char_nm_pinyin'):
+                    req_character['char_nm_pinyin'] = ''.join([item[0] for item in pinyin(req_character.get('char_name'), style=Style.NORMAL)])
+                name_to_pinyin[req_character.get('char_name')] = req_character.get('char_nm_pinyin')
+                if req_character.get('char_times') == 0:
+                    for name in name_to_pinyin:
+                        count = sum(line.count(name) for line in cleaned_lines)
+                        req_character['char_times'] = count
+
         for line in cleaned_lines:
             doc = nlp(line)
             sentences = [sent.text.strip() for sent in doc.sents]
-            sentence_array.extend(sentences)
-            names = [ent.text for ent in doc.ents if ent.label_ == "PERSON"]
-            total_name_counts.update(names)
-
-
+            modified_sentences = []
+            for sentence in sentences:
+                sentence_original_array.append(sentence)
+                for name, times in total_name_counts.items():
+                    if name in sentence:
+                        name_pinyin = name_to_pinyin[name]
+                        sentence = sentence.replace(name, f'[{name_pinyin}]')
+                modified_sentences.append(sentence)
+            sentence_array.extend(modified_sentences)
 
         # 翻译句子
         translated_sentences = [
@@ -293,34 +408,43 @@ def create_film_item():
             keywords = [extract_description(sentence) for sentence in sentence_array]
         elif language.lower() == "chinese":
             keywords = [extract_description(translated_sentence) for translated_sentence in translated_sentences]
-            for name, times in total_name_counts.items():
-                gender_probabilities = gender.predict(name)[1]
-                if gender_probabilities['M'] > gender_probabilities['F']:
-                    gender_label = 'male'
-                elif gender_probabilities['F'] > gender_probabilities['M']:
-                    gender_label = 'female'
-                else:
-                    gender_label = 'unknown'
-                characters.append({
-                    "char_name": name,
-                    "char_times": times,
-                    "char_gender": gender_label
-                })
+            if create_characters:
+                for name, times in total_name_counts.items():
+                    name_pinyin = name_to_pinyin[name]
+                    gender_probabilities = gender.predict(name)[1]
+
+                    if gender_probabilities['M'] > gender_probabilities['F']:
+                        gender_label = 'male'
+                    elif gender_probabilities['F'] > gender_probabilities['M']:
+                        gender_label = 'female'
+                    else:
+                        gender_label = 'unknown'
+
+                    characters.append({
+                        "char_name": name,
+                        "char_nm_pinyin": name_pinyin,
+                        "char_times": times,
+                        "char_gender": gender_label
+                    })
+            else:
+                characters.extend(req_characters)
 
         # 根据语言参数调整返回的 JSON 结构
         if language.lower() == "english":
             # 英文句子设为 TranslatedText，翻译后的中文设为 OriginalText
             response_data = {
                 "original_text": translated_sentences,
-                "translated_text": sentence_array,
+                "translated_text": sentence_original_array,
+                "pinyin_text": sentence_array,
                 "prompt_key": keywords,
                 "characters": characters
             }
         elif language.lower() == "chinese":
             # 中文句子设为 OriginalText，翻译后的英文设为 TranslatedText
             response_data = {
-                "original_text": sentence_array,
+                "original_text": sentence_original_array,
                 "translated_text": translated_sentences,
+                "pinyin_text": sentence_array,
                 "prompt_key": keywords,
                 "characters": characters
             }

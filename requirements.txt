@@ -7,3 +7,4 @@ transformers
 flask
 pymediainfo
 imageio
+pypinyin
