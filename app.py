@@ -224,6 +224,9 @@ def create_film_char():
     # 解析 JSON 数据
     file_path = data.get('file_path')
     language = data.get('language')
+    req_lora_sd = data.get('lora_sd', [])
+    req_lora_config = data.get('lora_config', [])
+
     # 验证输入参数
     if not file_path or not language:
         return jsonify({"error": "Missing required parameters."}), 400
@@ -279,6 +282,10 @@ def create_film_char():
 
         for name, times in total_name_counts.items():
             name_pinyin = name_to_pinyin[name]
+            lora_name = ''
+            lora_alias = ''
+            lora_trigger = ''
+            lora_prefix = ''
             gender_probabilities = gender.predict(name)[1]
 
             if gender_probabilities['M'] > gender_probabilities['F']:
@@ -288,11 +295,24 @@ def create_film_char():
             else:
                 gender_label = 'unknown'
 
+            for lora_config in req_lora_config:
+                if lora_config.get('LoraGender') == gender_label:
+                    lora_alias = lora_config.get('LoraAlias')
+                    lora_trigger = lora_config.get('LoraTrigger')
+                    lora_prefix = lora_config.get('LoraPrefix')
+                    for lora_sd in req_lora_sd:
+                        if lora_sd.get('alias') == lora_alias:
+                            lora_name = lora_sd.get('name')
+                            break
             characters.append({
                 "char_name": name,
                 "char_nm_pinyin": name_pinyin,
                 "char_times": times,
-                "char_gender": gender_label
+                "char_gender": gender_label,
+                "lora_name": lora_name,
+                "lora_alias": lora_alias,
+                "lora_trigger": lora_trigger,
+                "lora_prefix": lora_prefix,
             })
         return jsonify(characters)
 
@@ -311,6 +331,8 @@ def create_film_item():
     secret_key = data.get('secret_key')  # Tencent 翻译 API 密钥
     create_characters = data.get('create_characters')
     req_characters = data.get('characters', [])
+    req_lora_sd = data.get('lora_sd', [])
+    req_lora_config = data.get('lora_config', [])
 
     # 验证输入参数
     if not file_path or not language or not translation_module:
@@ -411,6 +433,10 @@ def create_film_item():
             if create_characters:
                 for name, times in total_name_counts.items():
                     name_pinyin = name_to_pinyin[name]
+                    lora_name = ''
+                    lora_alias = ''
+                    lora_trigger = ''
+                    lora_prefix = ''
                     gender_probabilities = gender.predict(name)[1]
 
                     if gender_probabilities['M'] > gender_probabilities['F']:
@@ -419,12 +445,25 @@ def create_film_item():
                         gender_label = 'female'
                     else:
                         gender_label = 'unknown'
+                    for lora_config in req_lora_config:
+                        if lora_config.get('LoraGender') == gender_label:
+                            lora_alias = lora_config.get('LoraAlias')
+                            lora_trigger = lora_config.get('LoraTrigger')
+                            lora_prefix = lora_config.get('LoraPrefix')
+                            for lora_sd in req_lora_sd:
+                                if lora_sd.get('alias') == lora_alias:
+                                    lora_name = lora_sd.get('name')
+                                    break
 
                     characters.append({
                         "char_name": name,
                         "char_nm_pinyin": name_pinyin,
                         "char_times": times,
-                        "char_gender": gender_label
+                        "char_gender": gender_label,
+                        "lora_name": lora_name,
+                        "lora_alias": lora_alias,
+                        "lora_trigger": lora_trigger,
+                        "lora_prefix": lora_prefix,
                     })
             else:
                 characters.extend(req_characters)
