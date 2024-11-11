@@ -297,13 +297,16 @@ def create_film_char():
 
             for lora_config in req_lora_config:
                 if lora_config.get('LoraGender') == gender_label:
-                    lora_alias = lora_config.get('LoraAlias')
-                    lora_trigger = lora_config.get('LoraTrigger')
-                    lora_prefix = lora_config.get('LoraPrefix')
-                    for lora_sd in req_lora_sd:
-                        if lora_sd.get('alias') == lora_alias:
-                            lora_name = lora_sd.get('name')
-                            break
+                    if req_lora_sd is None or not req_lora_sd:
+                        break
+                    else:
+                        lora_alias = lora_config.get('LoraAlias')
+                        lora_trigger = lora_config.get('LoraTrigger')
+                        lora_prefix = lora_config.get('LoraPrefix')
+                        for lora_sd in req_lora_sd:
+                            if lora_sd.get('alias') == lora_alias:
+                                lora_name = lora_sd.get('name')
+                                break
             characters.append({
                 "char_name": name,
                 "char_nm_pinyin": name_pinyin,
@@ -379,6 +382,7 @@ def create_film_item():
 
         # 使用 spaCy 将整理后的文本按句子分解，得到句子数组
         sentence_original_array = []
+        sentence_audio_array = []
         sentence_array = []
         characters = []
         total_name_counts = Counter()
@@ -413,6 +417,15 @@ def create_film_item():
             modified_sentences = []
             for sentence in sentences:
                 sentence_original_array.append(sentence)
+                words = nlp(sentence)
+                modified_sentence = ""
+                for token in words:
+                    if "地" in token.text and token.pos_ != "NOUN":
+                        modified_sentence += "的"
+                    else:
+                        modified_sentence += token.text
+                sentence_audio_array.append(modified_sentence)
+
                 for name, times in total_name_counts.items():
                     if name in sentence:
                         name_pinyin = name_to_pinyin[name]
@@ -474,6 +487,7 @@ def create_film_item():
             response_data = {
                 "original_text": translated_sentences,
                 "translated_text": sentence_original_array,
+                "audio_text": sentence_audio_array,
                 "pinyin_text": sentence_array,
                 "prompt_key": keywords,
                 "characters": characters
@@ -483,6 +497,7 @@ def create_film_item():
             response_data = {
                 "original_text": sentence_original_array,
                 "translated_text": translated_sentences,
+                "audio_text": sentence_audio_array,
                 "pinyin_text": sentence_array,
                 "prompt_key": keywords,
                 "characters": characters
