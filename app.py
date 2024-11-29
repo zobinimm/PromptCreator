@@ -42,6 +42,7 @@ request_times = deque()
 # 调用限制
 MAX_REQUESTS = 5
 TIME_WINDOW = 1  # 时间窗口，单位为秒
+STRIP_CHARS = "，"
 
 # API:create_film_item
 def sign(key, msg):
@@ -122,6 +123,19 @@ def custom1_translate_zh(text):
         encoded = tokenizer_zh([text], return_tensors='pt')
         sequences = model_zh.generate(**encoded)
         return tokenizer_zh.batch_decode(sequences, skip_special_tokens=True)[0]
+
+def fix_sentence_len(input_text, max_length=40):
+    final_sentences = []
+    final_sentence = input_text
+    while len(final_sentence) > max_length:
+        cut_point = final_sentence.rfind(STRIP_CHARS, 0, max_length)
+        if cut_point == -1:
+            cut_point = max_length
+        final_sentences.append(final_sentence[:cut_point].strip())
+        final_sentence = final_sentence[cut_point:].lstrip(STRIP_CHARS).strip()
+    if final_sentence:
+        final_sentences.append(final_sentence)
+    return final_sentences
 
 def tencent_translate_text(text: str, source_lang: str, target_lang: str, secret_id: str, secret_key: str) -> str:
     global request_times
@@ -384,6 +398,7 @@ def create_film_item():
         sentence_original_array = []
         sentence_audio_array = []
         sentence_array = []
+        modified_sentences = []
         characters = []
         total_name_counts = Counter()
         name_to_pinyin = {}
@@ -414,31 +429,33 @@ def create_film_item():
         for line in cleaned_lines:
             doc = nlp(line)
             sentences = [sent.text.strip() for sent in doc.sents]
-            modified_sentences = []
-            for sentence in sentences:
-                sentence_original_array.append(sentence)
-                words = nlp(sentence)
-                modified_sentence = ""
-                for token in words:
-                    if "地" in token.text and token.pos_ != "NOUN":
-                        modified_sentence += "的"
-                    else:
-                        modified_sentence += token.text
-                sentence_audio_array.append(modified_sentence)
+            for sentence_org in sentences:
+                if language.lower() == "english":
+                    sentence_original_array.append(sentence_org)
+                elif language.lower() == "chinese":
+                    for fix_sentence in fix_sentence_len(sentence_org):
+                        sentence_original_array.append(fix_sentence)
 
-                for name, times in total_name_counts.items():
-                    if name in sentence:
-                        name_pinyin = name_to_pinyin[name]
-                        sentence = sentence.replace(name, f'[{name_pinyin}]')
-                modified_sentences.append(sentence)
-            sentence_array.extend(modified_sentences)
+        for sentence in sentence_original_array:
+            words = nlp(sentence)
+            modified_sentence = ""
+            for token in words:
+                if "地" in token.text and token.pos_ != "NOUN":
+                    modified_sentence += "的"
+                else:
+                    modified_sentence += token.text
+            sentence_audio_array.append(modified_sentence)
+            for name, times in total_name_counts.items():
+                if name in sentence:
+                    name_pinyin = name_to_pinyin[name]
+                    sentence = sentence.replace(name, f'[{name_pinyin}]')
+            modified_sentences.append(sentence)
+        sentence_array.extend(modified_sentences)
 
-        # 翻译句子
         translated_sentences = [
             translate_text(sentence, translation_module, source_lang, target_lang, appid, secret_key) for sentence in
             sentence_array]
 
-        # 提取关键词（根据语言决定从哪个句子列表中提取）
         if language.lower() == "english":
             keywords = [extract_description(sentence) for sentence in sentence_array]
         elif language.lower() == "chinese":
@@ -592,6 +609,7 @@ def create_film_draft():
     data_path = data.get('data_path')
     width = data.get('width')
     height = data.get('height')
+    fixed_width = width * 0.6
 
     dump_path  = os.path.join(os.path.dirname(data_path), 'Draft')
     if not os.path.exists(dump_path):
@@ -600,6 +618,10 @@ def create_film_draft():
 
     with open(data_path, 'r', encoding='utf-8') as file:
         json_data = json.load(file)
+
+    extra_material = {
+        "fixed_width": fixed_width,
+    }
 
     start_audio_time = 0
     # 创建剪映草稿
@@ -627,7 +649,7 @@ def create_film_draft():
         script.add_segment(audio_segment).add_segment(sticker_segment)
         text_segment = draft.Text_segment(original_text, trange(start_audio_time, audio_material.duration),
                                           style=draft.Text_style(color=(1.0, 1.0, 0.0)),
-                                          clip_settings=draft.Clip_settings(transform_y=-0.8))
+                                          clip_settings=draft.Clip_settings(transform_y=-0.8), extra_material_val=extra_material)
         script.add_segment(text_segment)
         start_audio_time += audio_material.duration
 
