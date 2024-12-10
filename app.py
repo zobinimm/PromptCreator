@@ -23,6 +23,7 @@ from spacy.matcher import Matcher
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 
 from libs.gender_predictor.Naive_Bayes_Gender.gender import Gender
+from genderize import Genderize
 
 current_directory = os.path.dirname(__file__)
 
@@ -248,6 +249,7 @@ def create_film_char():
     try:
         if language.lower() == "english":
             nlp = nlp_en
+            gender = Genderize()
         elif language.lower() == "chinese":
             nlp = nlp_zh
             gender = Gender()
@@ -261,7 +263,13 @@ def create_film_char():
         with open(file_path, 'r', encoding='utf-8') as file:
             for line in file:
                 line = line.strip()  # 去掉行首尾空白字符
-                line = ''.join(char for char in line if char not in string.whitespace and char not in CONTROL_CHARS)
+                if language.lower() == "english":
+                    line = ' '.join(
+                        ''.join(char for char in word if char not in CONTROL_CHARS)
+                        for word in line.split()
+                    )
+                elif language.lower() == "chinese":
+                    line = ''.join(char for char in line if char not in string.whitespace and char not in CONTROL_CHARS)
                 if not line:
                     continue
                 # 判断最后一个字符是否为标点符号
@@ -300,14 +308,26 @@ def create_film_char():
             lora_alias = ''
             lora_trigger = ''
             lora_prefix = ''
-            gender_probabilities = gender.predict(name)[1]
+            if language.lower() == "english":
+                gender_probabilities = gender.get(name)
+                if gender_probabilities:
+                    if gender_probabilities[0]['gender'] == 'female':
+                        gender_label = 'female'
+                    elif gender_probabilities[0]['gender'] == 'male':
+                        gender_label = 'male'
+                    else:
+                        gender_label = 'unknown'
+                else:
+                    gender_label = 'unknown'
+            elif language.lower() == "chinese":
+                gender_probabilities = gender.predict(name)[1]
 
-            if gender_probabilities['M'] > gender_probabilities['F']:
-                gender_label = 'male'
-            elif gender_probabilities['F'] > gender_probabilities['M']:
-                gender_label = 'female'
-            else:
-                gender_label = 'unknown'
+                if gender_probabilities['M'] > gender_probabilities['F']:
+                    gender_label = 'male'
+                elif gender_probabilities['F'] > gender_probabilities['M']:
+                    gender_label = 'female'
+                else:
+                    gender_label = 'unknown'
 
             for lora_config in req_lora_config:
                 if lora_config.get('LoraGender') == gender_label:
@@ -378,7 +398,13 @@ def create_film_item():
         with open(file_path, 'r', encoding='utf-8') as file:
             for line in file:
                 line = line.strip()  # 去掉行首尾空白字符
-                line = ''.join(char for char in line if char not in string.whitespace and char not in CONTROL_CHARS)
+                if language.lower() == "english":
+                    line = ' '.join(
+                        ''.join(char for char in word if char not in CONTROL_CHARS)
+                        for word in line.split()
+                    )
+                elif language.lower() == "chinese":
+                    line = ''.join(char for char in line if char not in string.whitespace and char not in CONTROL_CHARS)
                 if not line:
                     continue
                 # 判断最后一个字符是否为标点符号
