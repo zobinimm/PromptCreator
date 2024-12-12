@@ -306,6 +306,7 @@ def create_film_char():
             name_pinyin = name_to_pinyin[name]
             lora_name = ''
             lora_alias = ''
+            lora_alprompt = ''
             lora_trigger = ''
             lora_prefix = ''
             if language.lower() == "english":
@@ -335,6 +336,7 @@ def create_film_char():
                         break
                     else:
                         lora_alias = lora_config.get('LoraAlias')
+                        lora_alprompt = lora_config.get('LoraAlPrompt')
                         lora_trigger = lora_config.get('LoraTrigger')
                         lora_prefix = lora_config.get('LoraPrefix')
                         for lora_sd in req_lora_sd:
@@ -348,6 +350,7 @@ def create_film_char():
                 "char_gender": gender_label,
                 "lora_name": lora_name,
                 "lora_alias": lora_alias,
+                "lora_alprompt": lora_alprompt,
                 "lora_trigger": lora_trigger,
                 "lora_prefix": lora_prefix,
             })
@@ -491,6 +494,7 @@ def create_film_item():
                     name_pinyin = name_to_pinyin[name]
                     lora_name = ''
                     lora_alias = ''
+                    lora_alprompt = ''
                     lora_trigger = ''
                     lora_prefix = ''
                     gender_probabilities = gender.predict(name)[1]
@@ -504,6 +508,7 @@ def create_film_item():
                     for lora_config in req_lora_config:
                         if lora_config.get('LoraGender') == gender_label:
                             lora_alias = lora_config.get('LoraAlias')
+                            lora_alprompt = lora_config.get('LoraAlPrompt')
                             lora_trigger = lora_config.get('LoraTrigger')
                             lora_prefix = lora_config.get('LoraPrefix')
                             for lora_sd in req_lora_sd:
@@ -518,6 +523,7 @@ def create_film_item():
                         "char_gender": gender_label,
                         "lora_name": lora_name,
                         "lora_alias": lora_alias,
+                        "lora_alprompt": lora_alprompt,
                         "lora_trigger": lora_trigger,
                         "lora_prefix": lora_prefix,
                     })
