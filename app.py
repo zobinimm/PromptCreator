@@ -641,7 +641,7 @@ def create_film_draft():
     data_path = data.get('data_path')
     width = data.get('width')
     height = data.get('height')
-    fixed_width = width * 0.6
+    fixed_width = width * 0.53
 
     dump_path  = os.path.join(os.path.dirname(data_path), 'Draft')
     if not os.path.exists(dump_path):
