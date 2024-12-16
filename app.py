@@ -44,6 +44,7 @@ request_times = deque()
 MAX_REQUESTS = 5
 TIME_WINDOW = 1  # 时间窗口，单位为秒
 STRIP_CHARS = "，"
+SENTENCE_LIMIT = 24
 
 # API:create_film_item
 def sign(key, msg):
@@ -124,6 +125,28 @@ def custom1_translate_zh(text):
         encoded = tokenizer_zh([text], return_tensors='pt')
         sequences = model_zh.generate(**encoded)
         return tokenizer_zh.batch_decode(sequences, skip_special_tokens=True)[0]
+
+def process_clauses(clauses, min_length=5, max_length=40):
+    new_clauses = []
+    temp_clause = ""
+
+    for clause in clauses:
+        if not any('\u4e00' <= char <= '\u9fff' for char in clause):
+            continue
+        if temp_clause:
+            clause = temp_clause + clause
+            temp_clause = ""
+        if len(clause) < min_length:
+            temp_clause = clause
+        elif len(clause) > max_length:
+            new_clauses.extend(fix_sentence_len(clause, max_length))
+        else:
+            new_clauses.append(clause)
+    if temp_clause and new_clauses:
+        new_clauses[-1] += temp_clause
+    elif temp_clause:
+        new_clauses.append(temp_clause)
+    return new_clauses
 
 def fix_sentence_len(input_text, max_length=40):
     final_sentences = []
@@ -455,15 +478,21 @@ def create_film_item():
                         count = sum(line.count(name) for line in cleaned_lines)
                         req_character['char_times'] = count
 
-        for line in cleaned_lines:
-            doc = nlp(line)
-            sentences = [sent.text.strip() for sent in doc.sents]
-            for sentence_org in sentences:
-                if language.lower() == "english":
-                    sentence_original_array.append(sentence_org)
-                elif language.lower() == "chinese":
-                    for fix_sentence in fix_sentence_len(sentence_org):
-                        sentence_original_array.append(fix_sentence)
+        doc = nlp(''.join(cleaned_lines))
+        sentences = [sent.text for sent in doc.sents if sent.text.strip()]
+        if language.lower() == "english":
+            sentence_original_array.extend(sentences)
+        elif language.lower() == "chinese":
+            processed_clauses = process_clauses(sentences)
+            i = 0
+            while i < len(processed_clauses):
+                current_sentence = processed_clauses[i]
+                if i + 1 < len(processed_clauses) and len(current_sentence + processed_clauses[i + 1]) <= SENTENCE_LIMIT:
+                    sentence_original_array.append(current_sentence + processed_clauses[i + 1])
+                    i += 2
+                else:
+                    sentence_original_array.append(current_sentence)
+                    i += 1
 
         for sentence in sentence_original_array:
             words = nlp(sentence)
