@@ -3,6 +3,7 @@ import hmac
 import json
 import os
 import string
+import re
 import time
 from collections import Counter
 from collections import deque
@@ -44,6 +45,8 @@ request_times = deque()
 MAX_REQUESTS = 5
 TIME_WINDOW = 1  # 时间窗口，单位为秒
 STRIP_CHARS = "，"
+START_QUOTE = '“'
+END_QUOTE = '”'
 SENTENCE_LIMIT = 24
 
 # API:create_film_item
@@ -149,12 +152,26 @@ def process_clauses(clauses, min_length=5, max_length=40):
     return new_clauses
 
 def fix_sentence_len(input_text, max_length=40):
+    pattern = rf'{re.escape(START_QUOTE)}(.*?){re.escape(END_QUOTE)}'
+    matches = re.finditer(pattern, input_text)
+    result = []
+    for match in matches:
+        start_quote = match.start()
+        content = match.group(1)
+        comma_pos = content.find(STRIP_CHARS)
+        if comma_pos != -1:
+            result.append([
+                start_quote,
+                start_quote + 1 + comma_pos,
+                match.end() - 1
+            ])
+
     final_sentences = []
     final_sentence = input_text
     while len(final_sentence) > max_length:
         cut_point = final_sentence.rfind(STRIP_CHARS, 0, max_length)
-        if cut_point == -1:
-            cut_point = max_length
+        if result and any(cut_point in sublist for sublist in result):
+            break
         final_sentences.append(final_sentence[:cut_point].strip())
         final_sentence = final_sentence[cut_point:].lstrip(STRIP_CHARS).strip()
     if final_sentence:
