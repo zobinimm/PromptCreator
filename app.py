@@ -738,8 +738,9 @@ def create_film_draft():
         sticker_segment = draft.Video_segment(sticker_material, trange(start_audio_time, audio_material.duration))
         script.add_segment(audio_segment).add_segment(sticker_segment)
         text_segment = draft.Text_segment(original_text, trange(start_audio_time, audio_material.duration),
-                                          style=draft.Text_style(color=(1.0, 1.0, 0.0)),
-                                          clip_settings=draft.Clip_settings(transform_y=-0.8), extra_material_val=extra_material)
+                                          style=draft.Text_style(color=(0.6, 0.6, 0.8), align=1),
+                                          clip_settings=draft.Clip_settings(transform_y=-0.73), extra_material_val=extra_material,
+                                          border=draft.Text_border(color=(0.0, 0.0, 0.0), width=0.06))
         script.add_segment(text_segment)
         start_audio_time += audio_material.duration
 
