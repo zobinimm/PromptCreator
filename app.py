@@ -413,6 +413,7 @@ def create_film_item():
     req_characters = data.get('characters', [])
     req_lora_sd = data.get('lora_sd', [])
     req_lora_config = data.get('lora_config', [])
+    audio_settings = data.get('audio_settings')
 
     # 验证输入参数
     if not file_path or not language or not translation_module:
@@ -465,6 +466,7 @@ def create_film_item():
 
         # 使用 spaCy 将整理后的文本按句子分解，得到句子数组
         sentence_original_array = []
+        modified_audio_array = []
         sentence_audio_array = []
         sentence_array = []
         modified_sentences = []
@@ -519,7 +521,7 @@ def create_film_item():
                     modified_sentence += "的"
                 else:
                     modified_sentence += token.text
-            sentence_audio_array.append(modified_sentence)
+            modified_audio_array.append(modified_sentence)
             for name, times in total_name_counts.items():
                 if name in sentence:
                     name_pinyin = name_to_pinyin[name]
@@ -576,6 +578,8 @@ def create_film_item():
             else:
                 characters.extend(req_characters)
 
+        chat = ChatTTS.Chat()
+        chat.load()
         # 根据语言参数调整返回的 JSON 结构
         if language.lower() == "english":
             # 英文句子设为 TranslatedText，翻译后的中文设为 OriginalText
@@ -588,6 +592,9 @@ def create_film_item():
                 "characters": characters
             }
         elif language.lower() == "chinese":
+            sentence_audio_array = [
+                create_audio_text(chat, sentence, audio_settings.get('top_P'), audio_settings.get('top_K'), audio_settings.get('temperature'), audio_settings.get('seed')) for sentence
+                in modified_audio_array]
             # 中文句子设为 OriginalText，翻译后的英文设为 TranslatedText
             response_data = {
                 "original_text": sentence_original_array,
@@ -636,6 +643,20 @@ def calculate_audio_duration(wav_data: np.ndarray, sample_rate: int) -> float:
     duration = len(wav_data) / sample_rate
     return duration
 
+def create_audio_text(chat, text: str, top_P: float, top_K: int, temperature: float, seed: int):
+    result = chat.infer(
+        text,
+        skip_refine_text=False,
+        refine_text_only=True,
+        params_refine_text=ChatTTS.Chat.RefineTextParams(
+            temperature=temperature,
+            top_P=top_P,
+            top_K=top_K,
+            manual_seed=seed,
+        ),
+    )
+    return ''.join(result)
+
 @app.route('/createfilmaudio', methods=['POST'])
 def create_film_audio():
     data = request.get_json()
@@ -652,19 +673,6 @@ def create_film_audio():
         chat = ChatTTS.Chat()
         chat.load()
         rand_spk = torch.load(f'./speaker/{seed:05d}.pt', map_location=chat.device)
-
-        new_text = chat.infer(
-            text,
-            skip_refine_text=False,
-            refine_text_only=True,
-            params_refine_text=ChatTTS.Chat.RefineTextParams(
-                temperature=temperature,
-                top_P=top_P,
-                top_K=top_K,
-                manual_seed=seed,
-            ),
-        )
-
         params_infer_code = ChatTTS.Chat.InferCodeParams(
             prompt=prompt,
             spk_emb=rand_spk,
@@ -674,7 +682,7 @@ def create_film_audio():
             manual_seed=seed,
         )
 
-        wavs = chat.infer(replace_arabic_with_chinese(new_text), skip_refine_text=True, params_infer_code=params_infer_code, )
+        wavs = chat.infer(replace_arabic_with_chinese(text), skip_refine_text=True, params_infer_code=params_infer_code, )
 
         for i in range(len(wavs)):
             if i == 0:
