@@ -8,4 +8,4 @@ flask
 pymediainfo
 imageio
 pypinyin
-genderize
+gender-guesser

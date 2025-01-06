@@ -24,7 +24,7 @@ from spacy.matcher import Matcher
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 
 from libs.gender_predictor.Naive_Bayes_Gender.gender import Gender
-from genderize import Genderize
+import gender_guesser.detector as gender_guesser
 
 current_directory = os.path.dirname(__file__)
 
@@ -289,7 +289,7 @@ def create_film_char():
     try:
         if language.lower() == "english":
             nlp = nlp_en
-            gender = Genderize()
+            gender = gender_guesser.Detector()
         elif language.lower() == "chinese":
             nlp = nlp_zh
             gender = Gender()
@@ -350,14 +350,10 @@ def create_film_char():
             lora_trigger = ''
             lora_prefix = ''
             if language.lower() == "english":
-                gender_probabilities = gender.get(name)
-                if gender_probabilities:
-                    if gender_probabilities[0]['gender'] == 'female':
-                        gender_label = 'female'
-                    elif gender_probabilities[0]['gender'] == 'male':
-                        gender_label = 'male'
-                    else:
-                        gender_label = 'unknown'
+                if gender.get_gender(name) == 'female':
+                    gender_label = 'female'
+                elif gender.get_gender(name) == 'male':
+                    gender_label = 'male'
                 else:
                     gender_label = 'unknown'
             elif language.lower() == "chinese":
@@ -425,6 +421,7 @@ def create_film_item():
     try:
         if language.lower() == "english":
             nlp = nlp_en
+            gender = gender_guesser.Detector()
             source_lang = "en"
             target_lang = "zh"  # 翻译目标语言为中文
         elif language.lower() == "chinese":
@@ -499,9 +496,7 @@ def create_film_item():
 
         doc = nlp(''.join(cleaned_lines))
         sentences = [sent.text for sent in doc.sents if sent.text.strip()]
-        if language.lower() == "english":
-            sentence_original_array.extend(sentences)
-        elif language.lower() == "chinese":
+        if language.lower() == "chinese":
             processed_clauses = process_clauses(sentences)
             i = 0
             while i < len(processed_clauses):
@@ -513,38 +508,67 @@ def create_film_item():
                     sentence_original_array.append(current_sentence)
                     i += 1
 
-        for sentence in sentence_original_array:
-            words = nlp(sentence)
-            modified_sentence = ""
-            for token in words:
-                if "地" in token.text and token.pos_ != "NOUN":
-                    modified_sentence += "的"
-                else:
-                    modified_sentence += token.text
-            modified_audio_array.append(modified_sentence)
-            for name, times in total_name_counts.items():
-                if name in sentence:
-                    name_pinyin = name_to_pinyin[name]
-                    sentence = sentence.replace(name, f'[{name_pinyin}]')
-            modified_sentences.append(sentence)
-        sentence_array.extend(modified_sentences)
+        if language.lower() == "english":
+            for sentence in sentences:
+                for name, times in total_name_counts.items():
+                    if name in sentence:
+                        name_pinyin = name_to_pinyin[name]
+                        sentence = sentence.replace(name, f'[{name_pinyin}]')
+                modified_sentences.append(sentence)
+            sentence_array.extend(modified_sentences)
+            sentence_original_array.extend(modified_sentences)
+            translated_sentences = [translate_text(sentence, translation_module, source_lang, target_lang, appid, secret_key) for sentence in sentences]
+            for sentence in translated_sentences:
+                words = nlp(sentence)
+                modified_sentence = ""
+                for token in words:
+                    if "地" in token.text and token.pos_ != "NOUN":
+                        modified_sentence += "的"
+                    else:
+                        modified_sentence += token.text
+                modified_audio_array.append(modified_sentence)
+        elif language.lower() == "chinese":
+            for sentence in sentence_original_array:
+                words = nlp(sentence)
+                modified_sentence = ""
+                for token in words:
+                    if "地" in token.text and token.pos_ != "NOUN":
+                        modified_sentence += "的"
+                    else:
+                        modified_sentence += token.text
+                modified_audio_array.append(modified_sentence)
+                for name, times in total_name_counts.items():
+                    if name in sentence:
+                        name_pinyin = name_to_pinyin[name]
+                        sentence = sentence.replace(name, f'[{name_pinyin}]')
+                modified_sentences.append(sentence)
+            sentence_array.extend(modified_sentences)
 
-        translated_sentences = [
-            translate_text(sentence, translation_module, source_lang, target_lang, appid, secret_key) for sentence in
-            sentence_array]
+            translated_sentences = [
+                translate_text(sentence, translation_module, source_lang, target_lang, appid, secret_key) for sentence in
+                sentence_array]
 
         if language.lower() == "english":
             keywords = [extract_description(sentence) for sentence in sentence_array]
         elif language.lower() == "chinese":
             keywords = [extract_description(translated_sentence) for translated_sentence in translated_sentences]
-            if create_characters:
-                for name, times in total_name_counts.items():
-                    name_pinyin = name_to_pinyin[name]
-                    lora_name = ''
-                    lora_alias = ''
-                    lora_alprompt = ''
-                    lora_trigger = ''
-                    lora_prefix = ''
+
+        if create_characters:
+            for name, times in total_name_counts.items():
+                name_pinyin = name_to_pinyin[name]
+                lora_name = ''
+                lora_alias = ''
+                lora_alprompt = ''
+                lora_trigger = ''
+                lora_prefix = ''
+                if language.lower() == "english":
+                    if gender.get_gender(name) == 'female':
+                        gender_label = 'female'
+                    elif gender.get_gender(name) == 'male':
+                        gender_label = 'male'
+                    else:
+                        gender_label = 'unknown'
+                elif language.lower() == "chinese":
                     gender_probabilities = gender.predict(name)[1]
 
                     if gender_probabilities['M'] > gender_probabilities['F']:
@@ -553,8 +577,11 @@ def create_film_item():
                         gender_label = 'female'
                     else:
                         gender_label = 'unknown'
-                    for lora_config in req_lora_config:
-                        if lora_config.get('LoraGender') == gender_label:
+                for lora_config in req_lora_config:
+                    if lora_config.get('LoraGender') == gender_label:
+                        if req_lora_sd is None or not req_lora_sd:
+                            break
+                        else:
                             lora_alias = lora_config.get('LoraAlias')
                             lora_alprompt = lora_config.get('LoraAlPrompt')
                             lora_trigger = lora_config.get('LoraTrigger')
@@ -564,22 +591,24 @@ def create_film_item():
                                     lora_name = lora_sd.get('name')
                                     break
 
-                    characters.append({
-                        "char_name": name,
-                        "char_nm_pinyin": name_pinyin,
-                        "char_times": times,
-                        "char_gender": gender_label,
-                        "lora_name": lora_name,
-                        "lora_alias": lora_alias,
-                        "lora_alprompt": lora_alprompt,
-                        "lora_trigger": lora_trigger,
-                        "lora_prefix": lora_prefix,
-                    })
-            else:
-                characters.extend(req_characters)
+                characters.append({
+                    "char_name": name,
+                    "char_nm_pinyin": name_pinyin,
+                    "char_times": times,
+                    "char_gender": gender_label,
+                    "lora_name": lora_name,
+                    "lora_alias": lora_alias,
+                    "lora_alprompt": lora_alprompt,
+                    "lora_trigger": lora_trigger,
+                    "lora_prefix": lora_prefix,
+                })
+        else:
+            characters.extend(req_characters)
 
         chat = ChatTTS.Chat()
         chat.load()
+        sentence_audio_array = [create_audio_text(chat, sentence, audio_settings.get('top_P'), audio_settings.get('top_K'),
+                              audio_settings.get('temperature'), audio_settings.get('seed')) for sentence in modified_audio_array]
         # 根据语言参数调整返回的 JSON 结构
         if language.lower() == "english":
             # 英文句子设为 TranslatedText，翻译后的中文设为 OriginalText
@@ -592,9 +621,6 @@ def create_film_item():
                 "characters": characters
             }
         elif language.lower() == "chinese":
-            sentence_audio_array = [
-                create_audio_text(chat, sentence, audio_settings.get('top_P'), audio_settings.get('top_K'), audio_settings.get('temperature'), audio_settings.get('seed')) for sentence
-                in modified_audio_array]
             # 中文句子设为 OriginalText，翻译后的英文设为 TranslatedText
             response_data = {
                 "original_text": sentence_original_array,
