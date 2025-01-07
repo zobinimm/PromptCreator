@@ -2,16 +2,17 @@ import hashlib
 import hmac
 import json
 import os
-import string
+import random
 import re
+import string
 import time
 from collections import Counter
 from collections import deque
 from datetime import datetime
 from typing import List
-from pypinyin import pinyin, Style
 
 import ChatTTS
+import gender_guesser.detector as gender_guesser
 import numpy as np
 import pyJianYingDraft as draft
 import requests
@@ -19,12 +20,12 @@ import spacy
 import torch
 from flask import Flask, request, jsonify
 from pyJianYingDraft import trange
+from pypinyin import pinyin, Style
 from scipy.io import wavfile
 from spacy.matcher import Matcher
-from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
+from transformers import AutoTokenizer, AutoModelForSeq2SeqLM, pipeline, set_seed
 
 from libs.gender_predictor.Naive_Bayes_Gender.gender import Gender
-import gender_guesser.detector as gender_guesser
 
 current_directory = os.path.dirname(__file__)
 
@@ -75,6 +76,16 @@ patterns = [
 for i, pattern in enumerate(patterns):
     matcher.add(f"DESCRIPTION_PATTERN_{i}", [pattern])
 
+local_model_path = "./models/succinctly-text2image"
+text_pipe = pipeline('text-generation', model=local_model_path)
+def prompt_generate(text: str):
+    seed = random.randint(100, 1000000)
+    set_seed(seed)
+    reprompt = text_pipe(text, max_length=random.randint(60, 90), num_return_sequences=1)
+    list = []
+    for sequence in reprompt:
+        list.append(sequence['generated_text'].strip())
+    return ''.join(list)
 
 def extract_description(text) -> List[str]:
     doc = nlp_en(text)
@@ -403,6 +414,7 @@ def create_film_item():
     file_path = data.get('file_path')
     language = data.get('language')
     translation_module = data.get('translation_module')
+    generate_prompt = data.get('generate_prompt')
     appid = data.get('appid')  # Tencent 翻译 API APPID
     secret_key = data.get('secret_key')  # Tencent 翻译 API 密钥
     create_characters = data.get('create_characters')
@@ -547,11 +559,11 @@ def create_film_item():
             translated_sentences = [
                 translate_text(sentence, translation_module, source_lang, target_lang, appid, secret_key) for sentence in
                 sentence_array]
-
-        if language.lower() == "english":
-            keywords = [extract_description(sentence) for sentence in sentence_array]
-        elif language.lower() == "chinese":
-            keywords = [extract_description(translated_sentence) for translated_sentence in translated_sentences]
+        if generate_prompt:
+            if language.lower() == "english":
+                keywords = [prompt_generate(sentence) for sentence in sentence_original_array]
+            elif language.lower() == "chinese":
+                keywords = [prompt_generate(translated_sentence) for translated_sentence in translated_sentences]
 
         if create_characters:
             for name, times in total_name_counts.items():
