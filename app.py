@@ -78,14 +78,16 @@ for i, pattern in enumerate(patterns):
 
 local_model_path = "./models/succinctly-text2image"
 text_pipe = pipeline('text-generation', model=local_model_path)
-def prompt_generate(text: str):
+def prompt_generate(text: str, qty):
     seed = random.randint(100, 1000000)
     set_seed(seed)
-    reprompt = text_pipe(text, max_length=random.randint(60, 90), num_return_sequences=1)
+    reprompt = text_pipe(text, max_length=random.randint(60, 90), num_return_sequences=qty)
     list = []
     for sequence in reprompt:
-        list.append(sequence['generated_text'].strip())
-    return ''.join(list)
+        line = sequence['generated_text'].strip()
+        # if line != text and len(line) > (len(text) + 4):
+        list.append(line)
+    return list
 
 def extract_description(text) -> List[str]:
     doc = nlp_en(text)
@@ -283,6 +285,16 @@ def tencent_translate_text(text: str, source_lang: str, target_lang: str, secret
     except requests.RequestException as err:
         print(f"Error: {err}")
 
+@app.route('/createkeywords', methods=['POST'])
+def create_keywords():
+    data = request.get_json()
+    generate_prompt = data.get('generate_prompt')
+    generate_prompt_qty = data.get('generate_prompt_qty')
+    response_data = {
+        "result": prompt_generate(generate_prompt, generate_prompt_qty)
+    }
+    return jsonify(response_data)
+
 @app.route('/createfilmchar', methods=['POST'])
 def create_film_char():
     # 获取输入参数
@@ -415,6 +427,7 @@ def create_film_item():
     language = data.get('language')
     translation_module = data.get('translation_module')
     generate_prompt = data.get('generate_prompt')
+    generate_prompt_qty = data.get('generate_prompt_qty')
     appid = data.get('appid')  # Tencent 翻译 API APPID
     secret_key = data.get('secret_key')  # Tencent 翻译 API 密钥
     create_characters = data.get('create_characters')
@@ -561,9 +574,9 @@ def create_film_item():
                 sentence_array]
         if generate_prompt:
             if language.lower() == "english":
-                keywords = [prompt_generate(sentence) for sentence in sentence_original_array]
+                keywords = [prompt_generate(sentence, generate_prompt_qty) for sentence in sentence_original_array]
             elif language.lower() == "chinese":
-                keywords = [prompt_generate(translated_sentence) for translated_sentence in translated_sentences]
+                keywords = [prompt_generate(translated_sentence, generate_prompt_qty) for translated_sentence in translated_sentences]
 
         if create_characters:
             for name, times in total_name_counts.items():
