@@ -26,6 +26,7 @@ from spacy.matcher import Matcher
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM, pipeline, set_seed
 
 from libs.gender_predictor.Naive_Bayes_Gender.gender import Gender
+from libs.pyJianYingDraft.pyJianYingDraft import Intro_type
 
 current_directory = os.path.dirname(__file__)
 
@@ -674,29 +675,68 @@ class TorchSeedContext:
     def __exit__(self, type, value, traceback):
         torch.random.set_rng_state(self.state)
 
+
+def number_to_chinese(num):
+    chinese_numerals = "零一二三四五六七八九"
+    unit_positions = ["", "十", "百", "千"]
+    big_unit_positions = ["", "万", "亿", "兆"]
+    if num == 0:
+        return "零"
+
+    def four_digit_to_chinese(n):
+        result = ""
+        zero_flag = False
+        num_str = str(n).zfill(4)  # 保证四位长度
+        for i, digit in enumerate(num_str):
+            digit = int(digit)
+            if digit != 0:
+                if zero_flag:
+                    result += "零"
+                    zero_flag = False
+                result += chinese_numerals[digit] + unit_positions[3 - i]
+            else:
+                zero_flag = True
+        return result.rstrip("零")
+
+    num_str = str(num)
+    result = ""
+    num_length = len(num_str)
+    big_unit_index = 0
+    while num_length > 0:
+        segment = num_str[max(0, num_length - 4):num_length]
+        segment_value = int(segment)
+        if segment_value > 0:
+            result = four_digit_to_chinese(segment_value) + big_unit_positions[big_unit_index] + result
+        num_length -= 4
+        big_unit_index += 1
+
+    result = result.rstrip("零")
+    result = result.replace("零万", "万").replace("零亿", "亿").replace("零兆", "兆")
+
+    if result.startswith("一十"):
+        result = result[1:]
+    return result
+
 def replace_arabic_with_chinese(text: str) -> str:
-    arabic_to_chinese = {
-        '0': '零',
-        '1': '一',
-        '2': '二',
-        '3': '三',
-        '4': '四',
-        '5': '五',
-        '6': '六',
-        '7': '七',
-        '8': '八',
-        '9': '九'
-    }
-    chinese_text = ''.join(arabic_to_chinese[char] if char in arabic_to_chinese else char for char in text)
-    return chinese_text
+    def replace_match(match):
+        num = int(match.group())
+        return number_to_chinese(num)
+    text = re.sub(r'\d+', replace_match, text)
+    if not re.search(r'\[unbreak\](\s*[\u3002\uff0c\uff01\uff1f\uff1a\uff1b…….,!?;:…])?$', text):
+        if re.search(r'[\u3002\uff0c\uff01\uff1f\uff1a\uff1b…….,!?;:…]$', text):
+            text = re.sub(r'([\u3002\uff0c\uff01\uff1f\uff1a\uff1b…….,!?;:…])$', r' [unbreak] \1', text)
+        else:
+            text += " [unbreak]"
+    return text
 
 def calculate_audio_duration(wav_data: np.ndarray, sample_rate: int) -> float:
     duration = len(wav_data) / sample_rate
     return duration
 
 def create_audio_text(chat, text: str, top_P: float, top_K: int, temperature: float, seed: int):
+    text_convert = replace_arabic_with_chinese(text)
     result = chat.infer(
-        text,
+        text_convert,
         skip_refine_text=False,
         refine_text_only=True,
         params_refine_text=ChatTTS.Chat.RefineTextParams(
@@ -733,7 +773,7 @@ def create_film_audio():
             manual_seed=seed,
         )
 
-        wavs = chat.infer(replace_arabic_with_chinese(text), skip_refine_text=True, params_infer_code=params_infer_code, )
+        wavs = chat.infer(text, skip_refine_text=True, params_infer_code=params_infer_code, )
 
         for i in range(len(wavs)):
             if i == 0:
@@ -795,6 +835,7 @@ def create_film_draft():
         script.add_material(audio_material).add_material(sticker_material)
         audio_segment = draft.Audio_segment(audio_material, trange(start_audio_time, audio_material.duration))
         sticker_segment = draft.Video_segment(sticker_material, trange(start_audio_time, audio_material.duration))
+        sticker_segment.add_animation(animation_type= Intro_type.放大)
         script.add_segment(audio_segment).add_segment(sticker_segment)
         text_segment = draft.Text_segment(original_text, trange(start_audio_time, audio_material.duration),
                                           style=draft.Text_style(color=(0.6, 0.6, 0.8), align=1),
