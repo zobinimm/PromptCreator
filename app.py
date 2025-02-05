@@ -718,15 +718,11 @@ def number_to_chinese(num):
     return result
 
 def replace_arabic_with_chinese(text: str) -> str:
-    def replace_match(match):
-        num = int(match.group())
-        return number_to_chinese(num)
-    text = re.sub(r'\d+', replace_match, text)
-    if not re.search(r'\[unbreak\](\s*[\u3002\uff0c\uff01\uff1f\uff1a\uff1b…….,!?;:…])?$', text):
-        if re.search(r'[\u3002\uff0c\uff01\uff1f\uff1a\uff1b…….,!?;:…]$', text):
-            text = re.sub(r'([\u3002\uff0c\uff01\uff1f\uff1a\uff1b…….,!?;:…])$', r' [unbreak] \1', text)
+    if not re.search(r'\[uv_break\](\s*[\。，！？：；.,!?:;])?$', text):
+        if re.search(r'[\。，！？：；.,!?:;]$', text):
+            text = re.sub(r'([\。，！？：；.,!?:;])$', r' [uv_break] \1', text)
         else:
-            text += " [unbreak]"
+            text += " [uv_break]"
     return text
 
 def calculate_audio_duration(wav_data: np.ndarray, sample_rate: int) -> float:
@@ -734,9 +730,12 @@ def calculate_audio_duration(wav_data: np.ndarray, sample_rate: int) -> float:
     return duration
 
 def create_audio_text(chat, text: str, top_P: float, top_K: int, temperature: float, seed: int):
-    text_convert = replace_arabic_with_chinese(text)
+    def replace_match(match):
+        num = int(match.group())
+        return number_to_chinese(num)
+    text = re.sub(r'\d+', replace_match, text)
     result = chat.infer(
-        text_convert,
+        text,
         skip_refine_text=False,
         refine_text_only=True,
         params_refine_text=ChatTTS.Chat.RefineTextParams(
@@ -746,7 +745,8 @@ def create_audio_text(chat, text: str, top_P: float, top_K: int, temperature: fl
             manual_seed=seed,
         ),
     )
-    return ''.join(result)
+    text_convert = replace_arabic_with_chinese(''.join(result))
+    return text_convert
 
 @app.route('/createfilmaudio', methods=['POST'])
 def create_film_audio():
