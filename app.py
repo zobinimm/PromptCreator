@@ -19,14 +19,13 @@ import requests
 import spacy
 import torch
 from flask import Flask, request, jsonify
-from pyJianYingDraft import trange
+from pyJianYingDraft import trange, Intro_type
 from pypinyin import pinyin, Style
 from scipy.io import wavfile
 from spacy.matcher import Matcher
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM, pipeline, set_seed
 
 from libs.gender_predictor.Naive_Bayes_Gender.gender import Gender
-from libs.pyJianYingDraft.pyJianYingDraft import Intro_type
 
 current_directory = os.path.dirname(__file__)
 
@@ -333,7 +332,8 @@ def create_film_char():
                         for word in line.split()
                     )
                 elif language.lower() == "chinese":
-                    line = ''.join(char for char in line if char not in string.whitespace and char not in CONTROL_CHARS)
+                    line = ''.join(char for char in line if char not in CONTROL_CHARS)
+                    line = re.sub(r'([\u4e00-\u9fff])\s+([\u4e00-\u9fff])', r'\1\2', line)
                 if not line:
                     continue
                 # 判断最后一个字符是否为标点符号
@@ -471,7 +471,8 @@ def create_film_item():
                         for word in line.split()
                     )
                 elif language.lower() == "chinese":
-                    line = ''.join(char for char in line if char not in string.whitespace and char not in CONTROL_CHARS)
+                    line = ''.join(char for char in line if char not in CONTROL_CHARS)
+                    line = re.sub(r'([\u4e00-\u9fff])\s+([\u4e00-\u9fff])', r'\1\2', line)
                 if not line:
                     continue
                 # 判断最后一个字符是否为标点符号
@@ -556,13 +557,13 @@ def create_film_item():
         elif language.lower() == "chinese":
             for sentence in sentence_original_array:
                 words = nlp(sentence)
-                modified_sentence = ""
+                positions_to_replace = []
                 for token in words:
                     if "地" in token.text and token.pos_ != "NOUN":
-                        modified_sentence += "的"
-                    else:
-                        modified_sentence += token.text
-                modified_audio_array.append(modified_sentence)
+                        positions_to_replace.append(token.idx)
+                for idx in positions_to_replace:
+                    sentence = sentence[:idx] + "的" + sentence[idx + 1:]
+                modified_audio_array.append(sentence)
                 for name, times in total_name_counts.items():
                     if name in sentence:
                         name_pinyin = name_to_pinyin[name]
@@ -722,7 +723,7 @@ def replace_arabic_with_chinese(text: str) -> str:
         if re.search(r'[\。，！？：；.,!?:;]$', text):
             text = re.sub(r'([\。，！？：；.,!?:;])$', r' [uv_break] \1', text)
         else:
-            text += " [uv_break]"
+            text += " [uv_break] "
     return text
 
 def calculate_audio_duration(wav_data: np.ndarray, sample_rate: int) -> float:
@@ -835,7 +836,7 @@ def create_film_draft():
         script.add_material(audio_material).add_material(sticker_material)
         audio_segment = draft.Audio_segment(audio_material, trange(start_audio_time, audio_material.duration))
         sticker_segment = draft.Video_segment(sticker_material, trange(start_audio_time, audio_material.duration))
-        sticker_segment.add_animation(animation_type= Intro_type.放大)
+        sticker_segment.add_animation(Intro_type.放大)
         script.add_segment(audio_segment).add_segment(sticker_segment)
         text_segment = draft.Text_segment(original_text, trange(start_audio_time, audio_material.duration),
                                           style=draft.Text_style(color=(0.6, 0.6, 0.8), align=1),
