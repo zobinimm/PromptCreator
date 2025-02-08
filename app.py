@@ -19,7 +19,7 @@ import requests
 import spacy
 import torch
 from flask import Flask, request, jsonify
-from pyJianYingDraft import trange, Intro_type
+from pyJianYingDraft import trange, Keyframe_property
 from pypinyin import pinyin, Style
 from scipy.io import wavfile
 from spacy.matcher import Matcher
@@ -836,7 +836,8 @@ def create_film_draft():
         script.add_material(audio_material).add_material(sticker_material)
         audio_segment = draft.Audio_segment(audio_material, trange(start_audio_time, audio_material.duration))
         sticker_segment = draft.Video_segment(sticker_material, trange(start_audio_time, audio_material.duration))
-        sticker_segment.add_animation(Intro_type.放大)
+        sticker_segment.add_keyframe(Keyframe_property.uniform_scale, time_offset=0, value=1.0)
+        sticker_segment.add_keyframe(Keyframe_property.uniform_scale, time_offset=sticker_segment.duration, value=1.2)
         script.add_segment(audio_segment).add_segment(sticker_segment)
         text_segment = draft.Text_segment(original_text, trange(start_audio_time, audio_material.duration),
                                           style=draft.Text_style(color=(0.6, 0.6, 0.8), align=1),
