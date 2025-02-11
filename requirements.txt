@@ -9,3 +9,5 @@ pymediainfo
 imageio
 pypinyin
 gender-guesser
+pyloudnorm
+soundfile

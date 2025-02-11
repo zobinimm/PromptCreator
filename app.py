@@ -18,6 +18,8 @@ import pyJianYingDraft as draft
 import requests
 import spacy
 import torch
+import soundfile as sf
+import pyloudnorm as pyln
 from flask import Flask, request, jsonify
 from pyJianYingDraft import trange, Keyframe_property
 from pypinyin import pinyin, Style
@@ -779,7 +781,12 @@ def create_film_audio():
         for i in range(len(wavs)):
             if i == 0:
                 wavfile.write(file_path, 24000, wavs[i])
-                duration = calculate_audio_duration(wavs[i], 24000)
+                meter = pyln.Meter(24000)
+                loudness = meter.integrated_loudness(wavs[i])
+                target_loudness = -23.0
+                normalized_wav = pyln.normalize.loudness(wavs[i], loudness, target_loudness)
+                sf.write(file_path, normalized_wav, 24000)
+                duration = calculate_audio_duration(normalized_wav, 24000)
 
         response_data = {
             "file_path": file_path,
