@@ -4,7 +4,7 @@ import json
 import os
 import random
 import re
-import string
+import cn2an
 import time
 from collections import Counter
 from collections import deque
@@ -222,7 +222,7 @@ def tencent_translate_text(text: str, source_lang: str, target_lang: str, secret
     version = "2018-03-21"
     action = "TextTranslate"
     payload = f'{{"SourceText":"{text}","Source":"{source_lang}","Target":"{target_lang}","ProjectId":0}}'
-    params = json.loads(payload)
+    # params = json.loads(payload)
     endpoint = "https://tmt.tencentcloudapi.com"
     algorithm = "TC3-HMAC-SHA256"
     timestamp = int(time.time())
@@ -679,54 +679,34 @@ class TorchSeedContext:
         torch.random.set_rng_state(self.state)
 
 
-def number_to_chinese(num):
-    chinese_numerals = "零一二三四五六七八九"
-    unit_positions = ["", "十", "百", "千"]
-    big_unit_positions = ["", "万", "亿", "兆"]
-    if num == 0:
-        return "零"
-
-    def four_digit_to_chinese(n):
-        result = ""
-        zero_flag = False
-        num_str = str(n).zfill(4)  # 保证四位长度
-        for i, digit in enumerate(num_str):
-            digit = int(digit)
-            if digit != 0:
-                if zero_flag:
-                    result += "零"
-                    zero_flag = False
-                result += chinese_numerals[digit] + unit_positions[3 - i]
-            else:
-                zero_flag = True
-        return result.rstrip("零")
-
-    num_str = str(num)
-    result = ""
-    num_length = len(num_str)
-    big_unit_index = 0
-    while num_length > 0:
-        segment = num_str[max(0, num_length - 4):num_length]
-        segment_value = int(segment)
-        if segment_value > 0:
-            result = four_digit_to_chinese(segment_value) + big_unit_positions[big_unit_index] + result
-        num_length -= 4
-        big_unit_index += 1
-
-    result = result.rstrip("零")
-    result = result.replace("零万", "万").replace("零亿", "亿").replace("零兆", "兆")
-
-    if result.startswith("一十"):
-        result = result[1:]
-    return result
+def replace_year(match):
+    chinese_numerals = ["零", "一", "二", "三", "四", "五", "六", "七", "八", "九"]
+    year = int(match.group()[:-1])
+    year_str = str(year)
+    return "".join([chinese_numerals[int(digit)] for digit in year_str]) + "年"
 
 def replace_arabic_with_chinese(text: str) -> str:
-    if not re.search(r'\[uv_break\](\s*[\。，！？：；.,!?:;])?$', text):
-        if re.search(r'[\。，！？：；.,!?:;]$', text):
-            text = re.sub(r'([\。，！？：；.,!?:;])$', r' [uv_break] \1', text)
-        else:
-            text += " [uv_break] "
-    return text
+    # if not re.search(r'\[uv_break\](\s*[\。，！？：；.,!?:;])?$', text):
+    #     if re.search(r'[\。，！？：；.,!?:;]$', text):
+    #         text = re.sub(r'([\。，！？：；.,!?:;])$', r' [uv_break] \1', text)
+    #     else:
+    #         text += " [uv_break] "
+    # return text
+    # pattern = r'(?<!\s\[uv_break\])([，。！？；：])'
+    # result = re.sub(pattern, r'[uv_break]\1', text)
+    # duplicate_pattern = r'(\[uv_break\])([，。！？；：]|\s)*\1'
+    # result = re.sub(duplicate_pattern, r'\1\2', result)
+    # if not re.search(r'\[uv_break\]\s*$', result):
+    #     result += '[uv_break]'
+    #
+    # return result
+    pattern = r'(?<!\s\[uv_break\])([，。！？；：、])'
+    result = re.sub(pattern, r'[uv_break]\1', text)
+    if not re.search(r'\[uv_break\][，。！？；：、]\s*$', result) and not re.search(r'\[uv_break\]\s*$', result):
+        result += ' [uv_break] '
+    pattern = r'(\[uv_break\])([，。！？；：、\s]*)\[uv_break\]'
+    result = re.sub(pattern, r'\1\2', result)
+    return result
 
 def calculate_audio_duration(wav_data: np.ndarray, sample_rate: int) -> float:
     duration = len(wav_data) / sample_rate
@@ -735,7 +715,8 @@ def calculate_audio_duration(wav_data: np.ndarray, sample_rate: int) -> float:
 def create_audio_text(chat, text: str, top_P: float, top_K: int, temperature: float, seed: int):
     def replace_match(match):
         num = int(match.group())
-        return number_to_chinese(num)
+        return cn2an.an2cn(num)
+    text = re.sub(r'\d{4}年', replace_year, text)
     text = re.sub(r'\d+', replace_match, text)
     result = chat.infer(
         text,
