@@ -25,7 +25,7 @@ from pyJianYingDraft import trange, Keyframe_property
 from pypinyin import pinyin, Style
 from scipy.io import wavfile
 from spacy.matcher import Matcher
-from transformers import AutoTokenizer, AutoModelForSeq2SeqLM, pipeline, set_seed
+from transformers import AutoTokenizer, AutoModelForSeq2SeqLM, AutoModelForCausalLM, pipeline, set_seed
 
 from libs.gender_predictor.Naive_Bayes_Gender.gender import Gender
 
@@ -80,15 +80,25 @@ for i, pattern in enumerate(patterns):
 
 local_model_path = "./models/succinctly-text2image"
 text_pipe = pipeline('text-generation', model=local_model_path)
-def prompt_generate(text: str, qty):
-    seed = random.randint(100, 1000000)
-    set_seed(seed)
-    reprompt = text_pipe(text, max_length=random.randint(60, 90), num_return_sequences=qty)
+local_sd_model_path = "DrishtiSharma/StableDiffusion-Prompt-Generator-GPT-Neo-125M"
+tokenizerPrompt = AutoTokenizer.from_pretrained(local_sd_model_path)
+modelPrompt = AutoModelForCausalLM.from_pretrained(local_sd_model_path)
+def prompt_generate(model_type: str, text: str, qty, prompt_style):
     list = []
-    for sequence in reprompt:
-        line = sequence['generated_text'].strip()
-        # if line != text and len(line) > (len(text) + 4):
-        list.append(line)
+    if model_type == "StableDiffusion-Prompt":
+        for style in prompt_style:
+            input_prompt = f"{style} {text}"
+            inputs = tokenizerPrompt(input_prompt, return_tensors="pt")
+            output = modelPrompt.generate(**inputs, max_length=150, do_sample=True, top_p=0.95, temperature=0.7)
+            list.append(tokenizerPrompt.decode(output[0], skip_special_tokens=True))
+    else:
+        seed = random.randint(100, 1000000)
+        set_seed(seed)
+        reprompt = text_pipe(text, max_length=random.randint(60, 90), num_return_sequences=qty)
+        for sequence in reprompt:
+            line = sequence['generated_text'].strip()
+            # if line != text and len(line) > (len(text) + 4):
+            list.append(line)
     return list
 
 def extract_description(text) -> List[str]:
@@ -292,8 +302,10 @@ def create_keywords():
     data = request.get_json()
     generate_prompt = data.get('generate_prompt')
     generate_prompt_qty = data.get('generate_prompt_qty')
+    generate_prompt_style = data.get('generate_prompt_style', [])
+    generate_prompt_model = data.get('generate_prompt_model')
     response_data = {
-        "result": prompt_generate(generate_prompt, generate_prompt_qty)
+        "result": prompt_generate(generate_prompt_model, generate_prompt, generate_prompt_qty, generate_prompt_style)
     }
     return jsonify(response_data)
 
@@ -431,6 +443,8 @@ def create_film_item():
     translation_module = data.get('translation_module')
     generate_prompt = data.get('generate_prompt')
     generate_prompt_qty = data.get('generate_prompt_qty')
+    generate_prompt_style = data.get('generate_prompt_style', [])
+    generate_prompt_model = data.get('generate_prompt_model')
     appid = data.get('appid')  # Tencent 翻译 API APPID
     secret_key = data.get('secret_key')  # Tencent 翻译 API 密钥
     create_characters = data.get('create_characters')
@@ -516,7 +530,8 @@ def create_film_item():
             for req_character in req_characters:
                 total_name_counts[req_character.get('char_name')] += 1
                 if not req_character.get('char_nm_pinyin'):
-                    req_character['char_nm_pinyin'] = ''.join([item[0] for item in pinyin(req_character.get('char_name'), style=Style.NORMAL)])
+                    req_character['char_nm_pinyin'] = ''.join(
+                        [item[0] for item in pinyin(req_character.get('char_name'), style=Style.NORMAL)])
                 name_to_pinyin[req_character.get('char_name')] = req_character.get('char_nm_pinyin')
                 if req_character.get('char_times') == 0:
                     for name in name_to_pinyin:
@@ -530,7 +545,8 @@ def create_film_item():
             i = 0
             while i < len(processed_clauses):
                 current_sentence = processed_clauses[i]
-                if i + 1 < len(processed_clauses) and len(current_sentence + processed_clauses[i + 1]) <= SENTENCE_LIMIT:
+                if i + 1 < len(processed_clauses) and len(
+                        current_sentence + processed_clauses[i + 1]) <= SENTENCE_LIMIT:
                     sentence_original_array.append(current_sentence + processed_clauses[i + 1])
                     i += 2
                 else:
@@ -546,7 +562,9 @@ def create_film_item():
                 modified_sentences.append(sentence)
             sentence_array.extend(modified_sentences)
             sentence_original_array.extend(modified_sentences)
-            translated_sentences = [translate_text(sentence, translation_module, source_lang, target_lang, appid, secret_key) for sentence in sentences]
+            translated_sentences = [
+                translate_text(sentence, translation_module, source_lang, target_lang, appid, secret_key) for sentence
+                in sentences]
             for sentence in translated_sentences:
                 words = nlp(sentence)
                 modified_sentence = ""
@@ -574,13 +592,16 @@ def create_film_item():
             sentence_array.extend(modified_sentences)
 
             translated_sentences = [
-                translate_text(sentence, translation_module, source_lang, target_lang, appid, secret_key) for sentence in
+                translate_text(sentence, translation_module, source_lang, target_lang, appid, secret_key) for sentence
+                in
                 sentence_array]
         if generate_prompt:
             if language.lower() == "english":
-                keywords = [prompt_generate(sentence, generate_prompt_qty) for sentence in sentence_original_array]
+                keywords = [prompt_generate(generate_prompt_model, sentence, generate_prompt_qty, generate_prompt_style)
+                            for sentence in sentence_original_array]
             elif language.lower() == "chinese":
-                keywords = [prompt_generate(translated_sentence, generate_prompt_qty) for translated_sentence in translated_sentences]
+                keywords = [prompt_generate(generate_prompt_model, translated_sentence, generate_prompt_qty,
+                                            generate_prompt_style) for translated_sentence in translated_sentences]
 
         if create_characters:
             for name, times in total_name_counts.items():
@@ -636,8 +657,10 @@ def create_film_item():
 
         chat = ChatTTS.Chat()
         chat.load()
-        sentence_audio_array = [create_audio_text(chat, sentence, audio_settings.get('top_P'), audio_settings.get('top_K'),
-                              audio_settings.get('temperature'), audio_settings.get('seed')) for sentence in modified_audio_array]
+        sentence_audio_array = [
+            create_audio_text(chat, sentence, audio_settings.get('top_P'), audio_settings.get('top_K'),
+                              audio_settings.get('temperature'), audio_settings.get('seed')) for sentence in
+            modified_audio_array]
         # 根据语言参数调整返回的 JSON 结构
         if language.lower() == "english":
             # 英文句子设为 TranslatedText，翻译后的中文设为 OriginalText
@@ -789,10 +812,9 @@ def create_film_draft():
     height = data.get('height')
     fixed_width = width * 0.53
 
-    dump_path  = os.path.join(os.path.dirname(data_path), 'Draft')
+    dump_path = os.path.join(os.path.dirname(data_path), 'Draft')
     if not os.path.exists(dump_path):
         os.makedirs(dump_path)
-
 
     with open(data_path, 'r', encoding='utf-8') as file:
         json_data = json.load(file)
@@ -829,7 +851,8 @@ def create_film_draft():
         script.add_segment(audio_segment).add_segment(sticker_segment)
         text_segment = draft.Text_segment(original_text, trange(start_audio_time, audio_material.duration),
                                           style=draft.Text_style(color=(0.6, 0.6, 0.8), align=1),
-                                          clip_settings=draft.Clip_settings(transform_y=-0.73), extra_material_val=extra_material,
+                                          clip_settings=draft.Clip_settings(transform_y=-0.73),
+                                          extra_material_val=extra_material,
                                           border=draft.Text_border(color=(0.0, 0.0, 0.0), width=0.06))
         script.add_segment(text_segment)
         start_audio_time += audio_material.duration
