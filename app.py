@@ -729,6 +729,8 @@ def replace_arabic_with_chinese(text: str) -> str:
         result += ' [uv_break] '
     pattern = r'(\[uv_break\])([，。！？；：、\s]*)\[uv_break\]'
     result = re.sub(pattern, r'\1\2', result)
+    pattern = r'\[uv_break\]\s*。\s*\[uv_break\]\s*$'
+    result = re.sub(pattern, '[uv_break] 。', result)
     return result
 
 def calculate_audio_duration(wav_data: np.ndarray, sample_rate: int) -> float:
