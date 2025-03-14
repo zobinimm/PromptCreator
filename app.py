@@ -739,8 +739,28 @@ def calculate_audio_duration(wav_data: np.ndarray, sample_rate: int) -> float:
 
 def create_audio_text(chat, text: str, top_P: float, top_K: int, temperature: float, seed: int):
     def replace_match(match):
-        num = int(match.group())
-        return cn2an.an2cn(num)
+        num_str = match.group()
+        if num_str.endswith('%'):
+            num = float(num_str[:-1]) if '.' in num_str else int(num_str[:-1])
+            num_cn = cn2an.an2cn(num)
+            num_cn = normalize_number(num_cn)
+            return f"百分之{num_cn}"
+        elif num_str.endswith('℃'):
+            num = float(num_str[:-1]) if '.' in num_str else int(num_str[:-1])
+            num_cn = cn2an.an2cn(num)
+            num_cn = normalize_number(num_cn)
+            return f"{num_cn}摄氏度"
+        else:
+            num = float(num_str) if '.' in num_str else int(num_str)
+            num_cn = cn2an.an2cn(num)
+            num_cn = normalize_number(num_cn)
+            return num_cn
+    def normalize_number(num_cn):
+        num_cn = re.sub(r'二千', '两千', num_cn)
+        num_cn = re.sub(r'二百', '两百', num_cn)
+        num_cn = re.sub(r'二万', '两万', num_cn)
+        num_cn = re.sub(r'二亿', '两亿', num_cn)
+        return num_cn
     text = re.sub(r'\d{4}年', replace_year, text)
     text = re.sub(r'\d+', replace_match, text)
     result = chat.infer(
