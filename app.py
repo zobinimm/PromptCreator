@@ -762,7 +762,7 @@ def create_audio_text(chat, text: str, top_P: float, top_K: int, temperature: fl
         num_cn = re.sub(r'二亿', '两亿', num_cn)
         return num_cn
     text = re.sub(r'\d{4}年', replace_year, text)
-    text = re.sub(r'\d+', replace_match, text)
+    text = re.sub(r'\d+\.?\d*|\.\d+', replace_match, text)
     result = chat.infer(
         text,
         skip_refine_text=False,
